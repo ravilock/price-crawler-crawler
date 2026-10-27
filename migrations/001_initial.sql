@@ -21,7 +21,10 @@ CREATE TABLE IF NOT EXISTS price_availability_observation (
  price_cents bigint, payment_method text, availability text NOT NULL CHECK (availability IN ('available','unavailable','unknown')),
  observed_at timestamptz NOT NULL, idempotency_key text NOT NULL UNIQUE
 );
-CREATE TABLE IF NOT EXISTS outbox_message (
- message_id uuid PRIMARY KEY, message_type text NOT NULL, aggregate_id uuid NOT NULL, correlation_id uuid NOT NULL,
- payload jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now(), publish_attempts integer NOT NULL DEFAULT 0, published_at timestamptz
+CREATE TABLE IF NOT EXISTS message_outbox (
+ message_id uuid PRIMARY KEY, destination text NOT NULL, message_type text NOT NULL,
+ organization_id uuid NOT NULL, correlation_id uuid NOT NULL, payload jsonb NOT NULL,
+ attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0), available_at timestamptz NOT NULL DEFAULT now(),
+ claimed_until timestamptz, dead_lettered_at timestamptz, last_error text,
+ published_at timestamptz, created_at timestamptz NOT NULL DEFAULT now()
 );
