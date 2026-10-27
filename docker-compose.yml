@@ -124,10 +124,31 @@ services:
         condition: service_healthy
       crawler-db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
     - 127.0.0.1:${APP_PORT:-19080}:8081
     profiles:
     - app
+    image: ${COMPOSE_PROJECT_NAME:-price-crawler-local}-app:local
+  migrate:
+    image: ${COMPOSE_PROJECT_NAME:-price-crawler-local}-app:local
+    build:
+      context: .
+    entrypoint:
+    - /migration
+    command:
+    - up
+    environment:
+      DATABASE_URL: ${DATABASE_URL-postgres://crawler:${POSTGRES_PASSWORD:?Set local PostgreSQL password}@crawler-db:5432/crawler?sslmode=disable}
+      MIGRATION_TIMEOUT_SECONDS: ${MIGRATION_TIMEOUT_SECONDS:-120}
+    depends_on:
+      crawler-db:
+        condition: service_healthy
+    profiles:
+    - app
+    - admin
+    restart: 'no'
 volumes:
   rabbit-data: {}
   keycloak-data: {}

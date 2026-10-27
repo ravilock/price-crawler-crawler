@@ -37,8 +37,8 @@ make run
 `make deps.up` pulls selected dependencies and stops on failure; it never substitutes a
 cached image after a failed pull. The direct Compose command uses its normal pull policy;
 explicitly pull first when freshness/availability verification is required.
-Stateful host execution will require `make migrate.up` followed by `make migrate.version`
-once its migration task is delivered; do not treat this startup scaffold as migrated.
+Before host execution, apply this checkout's packaged migrations with `make migrate.up`
+and inspect the clean result with `make migrate.version`. Then run `make run`.
 For Node services, run `npm install` before host execution. `make run` maps database/broker
 connections to the configured localhost ports, and binds the host process to `127.0.0.1`.
 
@@ -134,9 +134,9 @@ automatic rollback or forced version is permitted.
 ## Delivery status
 
 Infrastructure readiness is gated by authenticated PostgreSQL `SELECT 1`, RabbitMQ health,
-and Keycloak realm discovery with the expected issuer where selected. Application
-connection handling, migration gating and dependency-loss readiness are delivered by
-T073–T076/T085–T086/T105–T109. Current baseline worker images may exit until executable
+and Keycloak realm discovery with the expected issuer where selected. Crawler migration packaging and the app-profile migration gate are delivered by T073.
+Application connection handling and dependency-loss readiness remain T085–T086; the
+other owners retain their separate migration/runtime tasks. Current baseline worker images may exit until executable
 wiring is implemented. This guide does not claim those future acceptance checks passed.
 
 ## Verification — 2026-10-27
@@ -146,3 +146,86 @@ passed. The current test target contains no service behavior tests yet. Minimum
 dependencies passed real `docker compose up --wait` in isolated project `t065-1d91f32568`,
 with host ports removed; normal shutdown retained its named volumes. This verifies
 dependency startup, not application, migration, demo or business-workflow readiness.
+
+## Owned migrations — T073
+
+The crawler image packages `/migrations`, the PostgreSQL-capable upstream
+`migrate/migrate:v4.18.3` CLI at `/usr/local/bin/migrate`, and `/migration`, a bounded
+administrative entry point that reads `DATABASE_URL` from environment configuration.
+The upstream CLI image tag was verified published on 2026-10-27. `MIGRATION_TIMEOUT_SECONDS`
+defaults to 120 and accepts 1–3600 seconds. Administrative migration jobs connect only to
+the crawler's database. They never run another service's migrations.
+
+```sh
+make deps.up
+make migrate.up
+make migrate.version
+make run
+```
+
+`make migrate.up` builds the checkout's image and runs an ephemeral `migrate` job after
+the crawler database is healthy. `make migrate.version` uses the same image to report
+`version=<number> dirty=<true|false>` or `version=none dirty=false`. Host Go does not need
+a separately installed migration CLI. The app profile waits for successful completion
+of the migration job before starting `/crawler`; it stays stopped on migration failure.
+The integrated GHCR stack will use the matching packaged files after its separate T077
+implementation and publication gates.
+
+The historical SQL contents are retained as `001_initial.up.sql` and
+`002_message_delivery.up.sql`. Their version ordering is unchanged. Version 1 owns the
+initial collection tables and outbox; version 2 adds inbox deduplication and the pending
+outbox index. Re-running `up` on a clean current database is a no-op. Data and migration
+metadata live in the crawler's retained database volume. An older image cannot migrate
+a database whose tracked version is newer than its packaged release. Update the release
+version guard in `cmd/migration/main.go` when adding a new owned migration.
+
+### Adopt a database created before golang-migrate
+
+An unversioned database containing any crawler-owned table is refused before applying
+DDL or writing migration metadata. This avoids replaying schema creation over retained
+data. Back up the database outside Git, stop the application, and compare the actual
+schema with the ordered up files and a fresh disposable database first. Identify the
+highest contiguous migration whose complete schema is already present. Do not infer a
+baseline merely because one table exists, or adopt a partially applied schema.
+
+Only after the schema is verified, an operator may explicitly record that baseline.
+For a database confirmed to contain the complete versions 1 **and** 2, the command is:
+
+```sh
+docker compose --profile admin run --rm --entrypoint /bin/sh migrate -ec \
+  'exec /usr/local/bin/migrate -path /migrations -database "$DATABASE_URL" force 2'
+make migrate.version
+make migrate.up
+```
+
+If only the complete version-1 schema is present, explicitly record version 1 instead;
+`make migrate.up` then applies version 2 normally. The database URL is expanded inside
+the administrative container and is never echoed by the Make target. Baseline adoption
+is a manual operation; no application or startup command forces a version automatically.
+
+### Failed/dirty migrations and rollback
+
+On failure, the migration command reports the version/dirty state and bounded diagnostics
+with the configured URL/password redacted. The app remains stopped. Inspect the failed SQL,
+the actual owned schema and a backup before repairing/restoring it. An operator may correct
+version metadata only after identifying the schema that actually exists. Startup never
+rolls back, clears dirty state, deletes data or forces a version. `make migrate.version`
+remains available for diagnosis on a dirty database.
+
+Down files are destructive, explicit administrative operations; they are never invoked
+by the provided startup targets. Version 2 down removes inbox deduplication history and
+its index while retaining the version-1 outbox. Version 1 down deletes the owned collection
+tables and outbox. Back up retained data and review the SQL before any operator-directed
+rollback. Ordinary `make down` preserves named volumes.
+
+### Migration verification — 2026-10-27
+
+`make test lint build` passed, including diagnostic redaction/bounds unit tests.
+Real packaged-image acceptance passed fresh startup, retained restart, v1→v2 upgrade
+with retained source data, refusal of unversioned owned tables, explicit verified
+legacy adoption and an actual failed migration job blocking app startup while dirty
+state stayed visible. Test projects `t073-fresh-7c89ea09bd`,
+`t073-upgrade-b02346d2a8` and `t073-legacy-f564d9fc01` were shut down; their named
+volumes were retained. Historical up SQL contents were preserved byte for byte.
+This evidence covers owned migrations; application dependency-aware readiness remains
+T085–T086.
