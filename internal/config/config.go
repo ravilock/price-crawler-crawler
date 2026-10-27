@@ -21,13 +21,14 @@ func Load() (Config, error) {
 		}
 		c.WorkerConcurrency = n
 	}
-	for name, value := range map[string]string{"RABBITMQ_URL": c.RabbitMQURL} {
+	for name, value := range map[string]string{"RABBITMQ_URL": c.RabbitMQURL, "DATABASE_URL": c.DatabaseURL} {
 		if value == "" {
 			return Config{}, fmt.Errorf("%s is required", name)
 		}
 	}
 	return c, nil
 }
+
 func env(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value

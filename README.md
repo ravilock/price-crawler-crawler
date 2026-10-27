@@ -141,6 +141,11 @@ wiring is implemented. This guide does not claim those future acceptance checks 
 
 ## Verification — 2026-10-27
 
+T085 checks passed with isolated RabbitMQ/PostgreSQL dependencies and the packaged
+migration: `make run` started the crawler and `/healthz` returned alive; Ctrl-C stopped
+the host process. Stopping the test broker made `make run` fail with a safe RabbitMQ
+connection diagnostic. The isolated project was cleaned up after the check.
+
 `make test lint build`, Compose resolution and the dependency-image inventory check
 passed. The current test target contains no service behavior tests yet. Minimum
 dependencies passed real `docker compose up --wait` in isolated project `t065-1d91f32568`,
