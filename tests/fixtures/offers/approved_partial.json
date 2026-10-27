@@ -1,0 +1,21 @@
+{
+  "name": "approved source with partial offer fields",
+  "source": {
+    "requested_url": "https://shop.example.test/products/widget?color=blue&utm_source=fixture",
+    "approved_hosts": ["shop.example.test"],
+    "active": true,
+    "robots": "allow",
+    "redirect_url": "https://shop.example.test/products/widget?color=blue&utm_source=fixture"
+  },
+  "page": {
+    "title": "Example Widget",
+    "price": "R$ 1.299,90",
+    "availability": "In stock"
+  },
+  "expected": {
+    "policy": "allow",
+    "title": {"value": "Example Widget", "status": "valid"},
+    "price": {"value": 129990, "currency": "BRL", "status": "valid"},
+    "availability": {"value": "available", "status": "valid"}
+  }
+}

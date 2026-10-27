@@ -1,0 +1,12 @@
+{
+  "name": "source host is not approved",
+  "source": {
+    "requested_url": "https://outside.example.test/products/widget",
+    "approved_hosts": ["shop.example.test"],
+    "active": true,
+    "robots": "allow",
+    "redirect_url": "https://outside.example.test/products/widget"
+  },
+  "page": {"title": "Example Widget", "price": "R$ 1.299,90", "availability": "In stock"},
+  "expected": {"policy": "block_source", "title": {"value": "Example Widget", "status": "valid"}, "price": {"value": 129990, "currency": "BRL", "status": "valid"}, "availability": {"value": "available", "status": "valid"}}
+}
