@@ -14,11 +14,11 @@ func TestSourcePolicyAndPartialOffers(t *testing.T) {
 		hits++
 		switch r.URL.Path {
 		case "/complete":
-			w.Write([]byte(`<html><title>Widget</title><meta property="product:price:amount" content="123.45"></html>`))
+			_, _ = w.Write([]byte(`<html><title>Widget</title><meta property="product:price:amount" content="123.45"></html>`))
 		case "/malformed":
-			w.Write([]byte(`<html><title>Widget</title><meta property="product:price:amount" content="not a price"></html>`))
+			_, _ = w.Write([]byte(`<html><title>Widget</title><meta property="product:price:amount" content="not a price"></html>`))
 		case "/partial":
-			w.Write([]byte(`<html><title>Widget</title></html>`))
+			_, _ = w.Write([]byte(`<html><title>Widget</title></html>`))
 		default:
 			http.NotFound(w, r)
 		}
