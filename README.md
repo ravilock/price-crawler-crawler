@@ -244,3 +244,31 @@ state stayed visible. Test projects `t073-fresh-7c89ea09bd`,
 volumes were retained. Historical up SQL contents were preserved byte for byte.
 This evidence covers owned migrations; application dependency-aware readiness remains
 T085–T086.
+
+
+## Source administration trust configuration
+
+Source administration is disabled for all callers unless a trusted operator supplies
+`SOURCE_ADMIN_IDENTITY_JSON` (or `SOURCE_ADMIN_IDENTITY_FILE` for a host process).
+The JSON contains `publisher` and `administrators`, for example:
+
+```json
+{"publisher":"user-api-admin","administrators":[{"subject":"example-subject","role":"administrator","organization_id":"00000000-0000-4000-8000-000000000001"}]}
+```
+
+Set `SOURCE_ADMIN_SUPPORTED_INTEGRATIONS` to a comma-separated list of integration
+names actually supported by this deployment. An empty list rejects approvals.
+
+These entries are authoritative membership configuration, not values from API request
+bodies. Keep the list synchronized with tenant membership and revoke entries immediately
+when membership changes; the worker reads it for each command. Provision a dedicated
+RabbitMQ identity used only by the user API and restrict its write permissions to the
+source-admin command queue. Publishers must set AMQP `UserId` to that authenticated
+identity; RabbitMQ verifies it. Do not use the shared local development broker user as
+the trusted publisher. A missing identity, unknown membership, or role mismatch is
+forbidden. Database and audit writes are transactional, and the outbox relay publishes
+with confirms and reports exhausted retries for operator recovery.
+
+Migration 4 adds source review, idempotency receipts, and audit data. Existing version-3
+volumes are upgraded by `make migrate.up` without resets. It does not modify the
+historical 1–3 migration files.

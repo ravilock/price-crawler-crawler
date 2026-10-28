@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"price-crawler/services/crawler/internal/admin"
 	"price-crawler/services/crawler/internal/config"
 	"price-crawler/services/crawler/internal/observability"
 
@@ -29,7 +30,7 @@ func verifyMigration(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT count(*), COALESCE(max(version),0), COALESCE(bool_or(dirty),false) FROM public.schema_migrations`).Scan(&count, &version, &dirty); err != nil {
 		return errors.New("cannot read crawler migration state")
 	}
-	if count != 1 || dirty || version != 3 {
+	if count != 1 || dirty || version != 4 {
 		return fmt.Errorf("crawler migration state is not clean (version=%d, dirty=%t, records=%d)", version, dirty, count)
 	}
 	return nil
@@ -80,6 +81,14 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	case <-startup.Done():
 		return fmt.Errorf("crawler database or migration readiness timeout: %v", database.LastError())
 	}
+
+	adminDone, relayDone := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(adminDone)
+		admin.RunWorker(monitorCtx, db, cfg.RabbitMQURL, os.Getenv("SOURCE_ADMIN_IDENTITY_FILE"), logger)
+	}()
+	go func() { defer close(relayDone); admin.RunAuditRelay(monitorCtx, db, cfg.RabbitMQURL, logger) }()
+	defer func() { stopMonitors(); <-adminDone; <-relayDone }()
 
 	pool := observability.NewWorkerPool(cfg.WorkerConcurrency)
 	mux := http.NewServeMux()

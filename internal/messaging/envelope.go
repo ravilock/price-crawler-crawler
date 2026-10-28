@@ -35,8 +35,8 @@ func (e Envelope) Validate() error {
 	if !uuidPattern.MatchString(e.MessageID) {
 		return errors.New("message_id must be a UUID")
 	}
-	if !messageTypePattern.MatchString(e.MessageType) {
-		return errors.New("message_type must be a dotted, versioned name")
+	if !messageTypePattern.MatchString(e.MessageType) && e.MessageType != "source.admin.command" && e.MessageType != "source.admin.result" && e.MessageType != "audit.event.recorded" {
+		return errors.New("message_type must be a supported dotted message name")
 	}
 	if e.SchemaVersion != 1 {
 		return fmt.Errorf("unsupported envelope schema_version %d", e.SchemaVersion)

@@ -1,0 +1,570 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit-operations.v1.schema.json",
+  "title": "Operational reads and audit events v1",
+  "oneOf": [
+    {
+      "allOf": [
+        {
+          "$ref": "message-envelope.v1.schema.json"
+        },
+        {
+          "properties": {
+            "message_type": {
+              "const": "operations.read.requested"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "actor": {
+                  "type": "object",
+                  "properties": {
+                    "subject": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "role": {
+                      "enum": [
+                        "administrator",
+                        "manager",
+                        "end_user",
+                        "auditor",
+                        "system"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "subject",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                },
+                "action": {
+                  "enum": [
+                    "queue.read",
+                    "jobs.read",
+                    "metrics.read",
+                    "audit.read"
+                  ]
+                },
+                "scope": {
+                  "enum": [
+                    "organization",
+                    "platform"
+                  ]
+                },
+                "queue": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "job_state": {
+                  "enum": [
+                    "queued",
+                    "running",
+                    "retrying",
+                    "failed",
+                    "completed"
+                  ]
+                },
+                "from_time": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "through_time": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "cursor": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "limit": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 100
+                }
+              },
+              "required": [
+                "actor",
+                "action",
+                "scope",
+                "limit"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "message-envelope.v1.schema.json"
+        },
+        {
+          "properties": {
+            "message_type": {
+              "const": "operations.read.result"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "enum": [
+                    "ok",
+                    "pending",
+                    "not_found",
+                    "forbidden",
+                    "invalid",
+                    "conflict",
+                    "expired",
+                    "not_ready"
+                  ]
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "queue": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "ready": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "unacknowledged": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "consumers": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "queue",
+                          "ready",
+                          "unacknowledged",
+                          "consumers"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "job_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "organization_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "offer_id": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "state": {
+                            "enum": [
+                              "queued",
+                              "running",
+                              "retrying",
+                              "failed",
+                              "completed"
+                            ]
+                          },
+                          "attempts": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "max_attempts": {
+                            "type": "integer",
+                            "minimum": 1
+                          },
+                          "next_attempt_at": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "format": "date-time"
+                          },
+                          "last_error_code": {
+                            "type": [
+                              "string",
+                              "null"
+                            ],
+                            "maxLength": 100
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updated_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "job_id",
+                          "organization_id",
+                          "state",
+                          "attempts",
+                          "max_attempts",
+                          "created_at",
+                          "updated_at"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "audit_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "actor": {
+                            "type": "object",
+                            "properties": {
+                              "subject": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              },
+                              "role": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 100
+                              }
+                            },
+                            "required": [
+                              "subject",
+                              "role"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "organization_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "action": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 200
+                          },
+                          "entity": {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 100
+                              },
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 200
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "id"
+                            ],
+                            "additionalProperties": false
+                          },
+                          "before": {},
+                          "after": {},
+                          "occurred_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        },
+                        "required": [
+                          "audit_id",
+                          "actor",
+                          "organization_id",
+                          "action",
+                          "entity",
+                          "before",
+                          "after",
+                          "occurred_at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "minItems": 0,
+                  "maxItems": 100
+                },
+                "metrics": {
+                  "type": "object",
+                  "properties": {
+                    "queued": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "running": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "failed": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "success_rate": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    "average_latency_ms": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "p95_latency_ms": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "retried": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "throughput_per_minute": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "requests_by_domain": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "domain": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 253
+                          },
+                          "requests": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "failures": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "rate_limited": {
+                            "type": "integer",
+                            "minimum": 0
+                          }
+                        },
+                        "required": [
+                          "domain",
+                          "requests",
+                          "failures",
+                          "rate_limited"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "maxItems": 100
+                    }
+                  },
+                  "required": [
+                    "queued",
+                    "running",
+                    "failed",
+                    "retried",
+                    "success_rate",
+                    "throughput_per_minute",
+                    "average_latency_ms",
+                    "p95_latency_ms",
+                    "requests_by_domain"
+                  ],
+                  "additionalProperties": false
+                },
+                "next_cursor": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "detail": {
+                      "type": "string",
+                      "minLength": 0,
+                      "maxLength": 500
+                    }
+                  },
+                  "required": [
+                    "code"
+                  ],
+                  "additionalProperties": false
+                },
+                "action": {
+                  "enum": [
+                    "queue.read",
+                    "jobs.read",
+                    "metrics.read",
+                    "audit.read"
+                  ]
+                }
+              },
+              "required": [
+                "status",
+                "action"
+              ],
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "status": {
+                        "const": "ok"
+                      }
+                    },
+                    "required": [
+                      "status"
+                    ]
+                  },
+                  "then": {
+                    "required": [
+                      "items",
+                      "next_cursor"
+                    ]
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "status": {
+                        "const": "ok"
+                      },
+                      "action": {
+                        "const": "metrics.read"
+                      }
+                    },
+                    "required": [
+                      "status",
+                      "action"
+                    ]
+                  },
+                  "then": {
+                    "required": [
+                      "metrics"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "allOf": [
+        {
+          "$ref": "message-envelope.v1.schema.json"
+        },
+        {
+          "properties": {
+            "message_type": {
+              "const": "audit.event.recorded"
+            },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "actor": {
+                  "type": "object",
+                  "properties": {
+                    "subject": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    },
+                    "role": {
+                      "enum": [
+                        "administrator",
+                        "manager",
+                        "end_user",
+                        "auditor",
+                        "system"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "subject",
+                    "role"
+                  ],
+                  "additionalProperties": false
+                },
+                "organization_id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "action": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "entity": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 100
+                    },
+                    "id": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 200
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "id"
+                  ],
+                  "additionalProperties": false
+                },
+                "before": {},
+                "after": {},
+                "occurred_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "actor",
+                "organization_id",
+                "action",
+                "entity",
+                "before",
+                "after",
+                "occurred_at"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

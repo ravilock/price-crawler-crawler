@@ -120,6 +120,8 @@ services:
     build:
       context: .
     environment:
+      SOURCE_ADMIN_IDENTITY_JSON: ${SOURCE_ADMIN_IDENTITY_JSON-}
+      SOURCE_ADMIN_SUPPORTED_INTEGRATIONS: ${SOURCE_ADMIN_SUPPORTED_INTEGRATIONS-}
       MOCK_SOURCE_ORIGIN: http://mock-store:8080
       MOCK_ENV: local
       HTTP_ADDR: ${HTTP_ADDR-:8081}
