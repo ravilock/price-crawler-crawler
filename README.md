@@ -76,6 +76,7 @@ profile for container execution. Their complete additional dependency closure is
 | collection | data-finder |
 | rendered | data-finder, renderer-parser |
 | api | user-api, keycloak |
+| acceptance | controlled source, crawler, finder, renderer, user-api, keycloak |
 
 ```sh
 # Example: select one profile listed above, without requiring sibling source.
@@ -84,8 +85,10 @@ make app.up WORKFLOW_PROFILES="collection"
 # Or docker compose --profile collection --profile app up --build -d
 ```
 
-The controlled mock-source image/profile is delivered separately by T120 after its real
-publication; no static fixture or invented image tag is substituted here. Dependency-only
+The controlled mock-source profile uses the public `v0.1.0-rc.1` image. Set a nonempty
+`MOCK_CONTROL_TOKEN` in untracked local configuration; controls bind only to loopback.
+Source origin inside Compose is `http://mock-store:8080`. Overrides persist in the
+project-scoped `mock-store-data` volume, which normal down retains. Dependency-only
 startup is distinct from a working collection, browser, monitoring or demo workflow.
 
 ## Image inventory and compatibility
@@ -184,7 +187,9 @@ implementation and publication gates.
 The historical SQL contents are retained as `001_initial.up.sql` and
 `002_message_delivery.up.sql`. Their version ordering is unchanged. Version 1 owns the
 initial collection tables and outbox; version 2 adds inbox deduplication and the pending
-outbox index. Re-running `up` on a clean current database is a no-op. Data and migration
+outbox index. Version 3 extends collection ownership and constraints; it preserves legacy
+observations without a request ID while requiring one for new rows. Existing rows that
+violate new constraints must be reviewed and corrected before upgrading. Re-running `up` on a clean current database is a no-op. Data and migration
 metadata live in the crawler's retained database volume. An older image cannot migrate
 a database whose tracked version is newer than its packaged release. Update the release
 version guard in `cmd/migration/main.go` when adding a new owned migration.
@@ -209,7 +214,7 @@ make migrate.up
 ```
 
 If only the complete version-1 schema is present, explicitly record version 1 instead;
-`make migrate.up` then applies version 2 normally. The database URL is expanded inside
+`make migrate.up` then applies versions 2 and 3 normally. The database URL is expanded inside
 the administrative container and is never echoed by the Make target. Baseline adoption
 is a manual operation; no application or startup command forces a version automatically.
 

@@ -1,0 +1,10 @@
+ALTER TABLE price_availability_observation DROP CONSTRAINT observation_request_required, DROP CONSTRAINT observation_request_once, DROP CONSTRAINT observation_request_tenant_fk, DROP CONSTRAINT observation_offer_tenant_fk, DROP CONSTRAINT observation_price_nonnegative, DROP COLUMN adapter_version, DROP COLUMN provenance, DROP COLUMN outcome, DROP COLUMN crawl_request_id;
+ALTER TABLE offer DROP CONSTRAINT offer_candidate_tenant_fk, DROP COLUMN product_information_candidate_id;
+DROP TABLE product_information_candidate;
+DROP FUNCTION candidate_identity_immutable();
+DROP TABLE page_fetch_outcome;
+ALTER TABLE crawl_request DROP CONSTRAINT crawl_offer_tenant_fk, DROP COLUMN completed_at, DROP COLUMN correlation_id, DROP COLUMN last_error_code, DROP COLUMN next_attempt_at, DROP COLUMN offer_id, DROP CONSTRAINT crawl_url_scheme, DROP CONSTRAINT crawl_state, DROP CONSTRAINT crawl_tenant_id;
+ALTER TABLE offer DROP COLUMN updated_at, DROP COLUMN created_at, DROP COLUMN last_valid_price_at, DROP CONSTRAINT offer_url_scheme, DROP CONSTRAINT offer_availability, DROP CONSTRAINT offer_price_nonnegative, DROP CONSTRAINT offer_source_tenant_fk, DROP CONSTRAINT offer_tenant_id;
+DROP TABLE source_path_override;
+ALTER TABLE source_domain_config DROP COLUMN updated_at, DROP COLUMN created_at, DROP COLUMN rendering_allowed, DROP COLUMN approved_categories, DROP COLUMN adapter_version, DROP COLUMN adapter_name, DROP COLUMN robots_content_hash, DROP COLUMN robots_expires_at, DROP COLUMN robots_checked_at, DROP COLUMN robots_status, DROP CONSTRAINT source_pacing_bounds, DROP CONSTRAINT source_domain_normalized, DROP CONSTRAINT source_domain_tenant_id;
+DROP FUNCTION collection_valid_url(text);

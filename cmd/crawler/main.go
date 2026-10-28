@@ -29,7 +29,7 @@ func verifyMigration(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT count(*), COALESCE(max(version),0), COALESCE(bool_or(dirty),false) FROM public.schema_migrations`).Scan(&count, &version, &dirty); err != nil {
 		return errors.New("cannot read crawler migration state")
 	}
-	if count != 1 || dirty || version != 2 {
+	if count != 1 || dirty || version != 3 {
 		return fmt.Errorf("crawler migration state is not clean (version=%d, dirty=%t, records=%d)", version, dirty, count)
 	}
 	return nil
