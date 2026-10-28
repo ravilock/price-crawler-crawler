@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"net/http"
 	"os"
 	"time"
@@ -15,7 +14,6 @@ import (
 	"price-crawler/services/crawler/internal/observability"
 
 	_ "github.com/lib/pq"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func verifyMigration(ctx context.Context, db *sql.DB) error {
@@ -31,7 +29,7 @@ func verifyMigration(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT count(*), COALESCE(max(version),0), COALESCE(bool_or(dirty),false) FROM public.schema_migrations`).Scan(&count, &version, &dirty); err != nil {
 		return errors.New("cannot read crawler migration state")
 	}
-	if count != 1 || dirty || version < 1 {
+	if count != 1 || dirty || version != 2 {
 		return fmt.Errorf("crawler migration state is not clean (version=%d, dirty=%t, records=%d)", version, dirty, count)
 	}
 	return nil
@@ -42,40 +40,58 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	if err != nil {
 		return errors.New("invalid crawler database configuration")
 	}
-	defer db.Close()
-	db.SetMaxOpenConns(cfg.WorkerConcurrency + 2)
-	startup, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	if err := db.PingContext(startup); err != nil {
-		return errors.New("crawler database is unavailable or credentials were rejected")
-	}
-	if err := verifyMigration(startup, db); err != nil {
-		return err
-	}
-	broker, err := amqp.DialConfig(cfg.RabbitMQURL, amqp.Config{Dial: func(network, address string) (net.Conn, error) {
-		return net.DialTimeout(network, address, 10*time.Second)
-	}})
-	if err != nil {
-		return errors.New("crawler RabbitMQ connection failed")
-	}
 	defer func() {
-		if closeErr := broker.Close(); closeErr != nil {
-			logger.Warn("RabbitMQ close failed", "error", closeErr)
+		if closeErr := db.Close(); closeErr != nil {
+			logger.Warn("database close failed", "error", closeErr)
 		}
 	}()
+	db.SetMaxOpenConns(cfg.WorkerConcurrency + 2)
+	broker := &observability.Broker{URL: cfg.RabbitMQURL, InitialDelay: cfg.ReconnectInitial, MaxDelay: cfg.ReconnectMax}
+	database := &observability.Dependency{InitialDelay: cfg.ReconnectInitial, MaxDelay: cfg.ReconnectMax, Check: func(probe context.Context) error {
+		var one int
+		if err := db.QueryRowContext(probe, "SELECT 1").Scan(&one); err != nil || one != 1 {
+			return errors.New("crawler database unavailable")
+		}
+		return verifyMigration(probe, db)
+	}}
+	monitorCtx, stopMonitors := context.WithCancel(ctx)
+	brokerReady, databaseReady := make(chan struct{}), make(chan struct{})
+	brokerDone, databaseDone := make(chan struct{}), make(chan struct{})
+	go func() { defer close(brokerDone); broker.Run(monitorCtx, brokerReady) }()
+	go func() { defer close(databaseDone); database.Run(monitorCtx, databaseReady) }()
+	defer func() { stopMonitors(); <-brokerDone; <-databaseDone }()
+	startup, cancel := context.WithTimeout(ctx, cfg.ReadinessTimeout)
+	defer cancel()
+	if err := broker.WaitReady(startup, brokerReady); err != nil {
+		return err
+	}
+	select {
+	case <-databaseReady:
+	case <-startup.Done():
+		return fmt.Errorf("crawler database or migration readiness timeout: %v", database.LastError())
+	}
 
 	pool := observability.NewWorkerPool(cfg.WorkerConcurrency)
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {
+		if !broker.Ready() || !database.Ready() {
+			http.Error(w, "dependency unavailable or migration not clean", http.StatusServiceUnavailable)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ready"}`))
+	})
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("content-type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"alive"}`))
 	})
 	bounded := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := pool.Run(r.Context(), func(context.Context) error {
-			mux.ServeHTTP(w, r)
-			return nil
-		}); err != nil {
+		if r.URL.Path != "/healthz" && r.URL.Path != "/readyz" && (!broker.Ready() || !database.Ready()) {
+			http.Error(w, "dependency unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if err := pool.Run(r.Context(), func(context.Context) error { mux.ServeHTTP(w, r); return nil }); err != nil {
 			http.Error(w, "service is shutting down", http.StatusServiceUnavailable)
 		}
 	})

@@ -133,6 +133,8 @@ automatic rollback or forced version is permitted.
 
 ## Delivery status
 
+`/healthz` reports process liveness; `/readyz` requires an authenticated RabbitMQ connection, database SELECT 1, and a clean expected migration version. Startup waits up to `READINESS_TIMEOUT_SECONDS` (default 120); dependency failures degrade readiness and retry with exponential delays bounded by `RECONNECT_INITIAL_DELAY_SECONDS` (default 1) and `RECONNECT_MAX_DELAY_SECONDS` (default 30). The app-profile health check uses `/readyz`. Readiness does not establish business workflow or demo readiness.
+
 Infrastructure readiness is gated by authenticated PostgreSQL `SELECT 1`, RabbitMQ health,
 and Keycloak realm discovery with the expected issuer where selected. Crawler migration packaging and the app-profile migration gate are delivered by T073.
 Application connection handling and dependency-loss readiness remain T085–T086; the

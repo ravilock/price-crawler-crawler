@@ -118,6 +118,8 @@ services:
       RABBITMQ_URL: ${RABBITMQ_URL-amqp://${RABBITMQ_DEFAULT_USER:-price}:${RABBITMQ_DEFAULT_PASS:?Set local RabbitMQ password}@rabbitmq:5672/}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
       READINESS_TIMEOUT_SECONDS: ${READINESS_TIMEOUT_SECONDS:-120}
+      RECONNECT_INITIAL_DELAY_SECONDS: ${RECONNECT_INITIAL_DELAY_SECONDS:-1}
+      RECONNECT_MAX_DELAY_SECONDS: ${RECONNECT_MAX_DELAY_SECONDS:-30}
       DATABASE_URL: ${DATABASE_URL-postgres://crawler:${POSTGRES_PASSWORD:?Set local PostgreSQL password}@crawler-db:5432/crawler?sslmode=disable}
     depends_on:
       rabbitmq:
@@ -126,6 +128,12 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:$${HTTP_ADDR##*:}/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
     ports:
     - 127.0.0.1:${APP_PORT:-19080}:8081
     profiles:
