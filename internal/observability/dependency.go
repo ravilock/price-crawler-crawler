@@ -16,8 +16,16 @@ type Dependency struct {
 	err                    error
 }
 
-func (d *Dependency) Ready() bool      { return d.ready.Load() }
-func (d *Dependency) LastError() error { d.mu.RLock(); defer d.mu.RUnlock(); return d.err }
+func (d *Dependency) Ready() bool {
+	return d.ready.Load()
+}
+
+func (d *Dependency) LastError() error {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.err
+}
+
 func (d *Dependency) Run(ctx context.Context, firstReady chan<- struct{}) {
 	initial, maximum := d.InitialDelay, d.MaxDelay
 	if initial <= 0 {

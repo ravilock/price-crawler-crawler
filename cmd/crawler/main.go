@@ -57,9 +57,19 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	monitorCtx, stopMonitors := context.WithCancel(ctx)
 	brokerReady, databaseReady := make(chan struct{}), make(chan struct{})
 	brokerDone, databaseDone := make(chan struct{}), make(chan struct{})
-	go func() { defer close(brokerDone); broker.Run(monitorCtx, brokerReady) }()
-	go func() { defer close(databaseDone); database.Run(monitorCtx, databaseReady) }()
-	defer func() { stopMonitors(); <-brokerDone; <-databaseDone }()
+	go func() {
+		defer close(brokerDone)
+		broker.Run(monitorCtx, brokerReady)
+	}()
+	go func() {
+		defer close(databaseDone)
+		database.Run(monitorCtx, databaseReady)
+	}()
+	defer func() {
+		stopMonitors()
+		<-brokerDone
+		<-databaseDone
+	}()
 	startup, cancel := context.WithTimeout(ctx, cfg.ReadinessTimeout)
 	defer cancel()
 	if err := broker.WaitReady(startup, brokerReady); err != nil {
