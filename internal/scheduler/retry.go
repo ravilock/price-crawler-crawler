@@ -29,15 +29,13 @@ func RetryDecision(outcome string, attempts int, retryAfter string, now time.Tim
 	if outcome == "rate_limited" && strings.TrimSpace(retryAfter) != "" {
 		raw := strings.TrimSpace(retryAfter)
 		var until time.Time
-		if seconds, err := strconv.Atoi(raw); err == nil && seconds >= 0 {
-			if seconds > 3600 {
-				return time.Time{}, false
+		if seconds, err := strconv.ParseInt(raw, 10, 64); err == nil && seconds >= 0 {
+			const maxSeconds = int64(100 * 365 * 24 * 60 * 60)
+			if seconds > maxSeconds {
+				seconds = maxSeconds
 			}
 			until = now.Add(time.Duration(seconds) * time.Second)
 		} else if value, err := http.ParseTime(raw); err == nil && value.After(now) {
-			if value.After(now.Add(time.Hour)) {
-				return time.Time{}, false
-			}
 			until = value
 		}
 		if until.After(next) {

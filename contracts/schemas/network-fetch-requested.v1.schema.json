@@ -6,6 +6,7 @@
       "$ref": "message-envelope.v1.schema.json"
     },
     {
+      "required": ["causation_id"],
       "properties": {
         "message_type": {
           "const": "network.fetch.requested"

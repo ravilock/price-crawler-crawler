@@ -142,13 +142,18 @@ func TestAuthorizedFetchWithRobotsAndNotifications(t *testing.T) {
 	if _, err = db.Exec(`INSERT INTO source_admin_review(organization_id,source_domain_id,requested_categories,requested_by,state,review) VALUES($1,$2,'["parts"]','admin','approved','{"access_rules_reviewed":true,"terms_reviewed":true,"supported_integration":"fixture"}')`, org, src); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec(`INSERT INTO crawl_request(id,organization_id,submitted_url,reason,state,idempotency_key,source_domain_id,category) VALUES($1,$2,$3,'manual','rendering','test-key',$4,'parts')`, job, org, origin+"/product", src); err != nil {
+	corr := "00000000-0000-4000-8000-000000000005"
+	renderID := "00000000-0000-4000-8000-000000000007"
+	if _, err = db.Exec(`INSERT INTO crawl_request(id,organization_id,submitted_url,reason,state,idempotency_key,source_domain_id,category,correlation_id) VALUES($1,$2,$3,'manual','rendering','test-key',$4,'parts',$5)`, job, org, origin+"/product", src, corr); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO message_outbox(message_id,destination,message_type,organization_id,correlation_id,payload) VALUES($1,'render.page.requested.v1','render.page.requested',$2,$3,jsonb_build_object('payload',jsonb_build_object('crawl_request_id',$4::text,'source_domain_id',$5::text)))`, renderID, org, corr, job, src); err != nil {
 		t.Fatal(err)
 	}
 	invoke := func(path, organization string) fetchReply {
 		t.Helper()
 		payload, _ := json.Marshal(fetchCommand{CrawlRequestID: job, SourceID: src, URL: origin + path, MaxBytes: 1024, DeadlineMS: 5000})
-		e := messaging.Envelope{MessageID: "00000000-0000-4000-8000-000000000004", MessageType: "network.fetch.requested", SchemaVersion: 1, OccurredAt: time.Now(), Organization: organization, CorrelationID: "00000000-0000-4000-8000-000000000005", Payload: payload}
+		e := messaging.Envelope{MessageID: "00000000-0000-4000-8000-000000000004", MessageType: "network.fetch.requested", SchemaVersion: 1, OccurredAt: time.Now(), Organization: organization, CorrelationID: corr, CausationID: renderID, Payload: payload}
 		reply, err := ExecuteFetch(context.Background(), db, scheduler.NewBudget(2), e)
 		if err != nil {
 			t.Fatal(err)
@@ -157,6 +162,11 @@ func TestAuthorizedFetchWithRobotsAndNotifications(t *testing.T) {
 	}
 	if reply := invoke("/product", org); reply.Status != "ok" {
 		t.Fatalf("allowed: %+v", reply)
+	}
+	badPayload, _ := json.Marshal(fetchCommand{CrawlRequestID: job, SourceID: src, URL: origin + "/product", MaxBytes: 1024, DeadlineMS: 5000})
+	bad := messaging.Envelope{MessageID: "00000000-0000-4000-8000-000000000004", MessageType: "network.fetch.requested", SchemaVersion: 1, OccurredAt: time.Now(), Organization: org, CorrelationID: corr, CausationID: "00000000-0000-4000-8000-000000000098", Payload: badPayload}
+	if reply, err := ExecuteFetch(context.Background(), db, scheduler.NewBudget(2), bad); err != nil || reply.Status != "blocked" {
+		t.Fatalf("unrelated render request: %+v %v", reply, err)
 	}
 	if reply := invoke("/denied", org); reply.Status != "blocked" {
 		t.Fatalf("disallowed: %+v", reply)

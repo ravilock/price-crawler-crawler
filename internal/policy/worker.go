@@ -74,7 +74,7 @@ func fetchID() (string, error) {
 // source/category scope. Unreadable robots creates an administrator notification
 // and applies the configured slow request budget.
 func ExecuteFetch(ctx context.Context, db *sql.DB, local *scheduler.Budget, e messaging.Envelope) (fetchReply, error) {
-	if e.Validate() != nil || e.MessageType != "network.fetch.requested" {
+	if e.Validate() != nil || e.MessageType != "network.fetch.requested" || e.CausationID == "" {
 		return fetchReply{Status: "blocked"}, nil
 	}
 	decoder := json.NewDecoder(bytes.NewReader(e.Payload))
@@ -86,7 +86,7 @@ func ExecuteFetch(ctx context.Context, db *sql.DB, local *scheduler.Budget, e me
 	bounded, cancel := context.WithTimeout(ctx, time.Duration(c.DeadlineMS)*time.Millisecond)
 	defer cancel()
 	var category string
-	err := db.QueryRowContext(bounded, `SELECT category FROM crawl_request WHERE organization_id=$1 AND id::text=$2 AND source_domain_id::text=$3 AND state='rendering' AND category IS NOT NULL`, e.Organization, c.CrawlRequestID, c.SourceID).Scan(&category)
+	err := db.QueryRowContext(bounded, `SELECT r.category FROM crawl_request r WHERE r.organization_id=$1 AND r.id::text=$2 AND r.source_domain_id::text=$3 AND r.state='rendering' AND r.category IS NOT NULL AND r.correlation_id::text=$4 AND EXISTS (SELECT 1 FROM message_outbox o WHERE o.organization_id=r.organization_id AND o.message_id::text=$5 AND o.correlation_id=r.correlation_id AND o.destination='render.page.requested.v1' AND o.payload->'payload'->>'crawl_request_id'=r.id::text AND o.payload->'payload'->>'source_domain_id'=r.source_domain_id::text)`, e.Organization, c.CrawlRequestID, c.SourceID, e.CorrelationID, e.CausationID).Scan(&category)
 	if errors.Is(err, sql.ErrNoRows) {
 		return fetchReply{Status: "blocked"}, nil
 	}

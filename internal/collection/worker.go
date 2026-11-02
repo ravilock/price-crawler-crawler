@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log/slog"
 	mathrand "math/rand/v2"
+	"net"
 	"net/url"
 	"sync"
 	"time"
@@ -91,7 +92,11 @@ func process(ctx context.Context, db *sql.DB, local *scheduler.Budget, j job) er
 		if errors.Is(err, context.Canceled) {
 			return err
 		}
-		return retry(ctx, db, j, "timeout", "")
+		var networkError net.Error
+		if errors.As(err, &networkError) && networkError.Timeout() {
+			return retry(ctx, db, j, "timeout", "")
+		}
+		return finishFailure(ctx, db, j, "fetch_failed")
 	}
 	switch page.Outcome {
 	case "timeout", "rate_limited", "server_error":
@@ -117,6 +122,13 @@ func retry(ctx context.Context, db *sql.DB, j job, outcome, retryAfter string) e
 	u, err := url.Parse(j.URL)
 	if err != nil {
 		return err
+	}
+	// A timed-out fetch has exhausted its request context; persist the retry
+	// using a separate bounded context while the lease check prevents stale writes.
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
 	}
 	_, err = scheduler.ScheduleRetry(ctx, db, j.Organization, j.ID, u.Hostname(), outcome, retryAfter, time.Now().UTC(), mathrand.Float64(), j.Lease)
 	return err

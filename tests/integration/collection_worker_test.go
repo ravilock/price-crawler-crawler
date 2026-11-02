@@ -10,12 +10,14 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
 	_ "github.com/lib/pq"
 	"price-crawler/services/crawler/internal/collection"
 	"price-crawler/services/crawler/internal/messaging"
+	"price-crawler/services/crawler/internal/policy"
 	"price-crawler/services/crawler/internal/scheduler"
 )
 
@@ -42,7 +44,14 @@ func TestCollectionWorkerPersistsFinderHandoff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var arrivalsMu sync.Mutex
+	var arrivals []time.Time
 	server := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(r.URL.Path) >= 8 && r.URL.Path[:8] == "/budget/" {
+			arrivalsMu.Lock()
+			arrivals = append(arrivals, time.Now())
+			arrivalsMu.Unlock()
+		}
 		if r.URL.Path == "/rate" {
 			w.Header().Set("Retry-After", "2")
 			w.WriteHeader(http.StatusTooManyRequests)
@@ -149,6 +158,60 @@ func TestCollectionWorkerPersistsFinderHandoff(t *testing.T) {
 	if err != nil || event.CorrelationID != corr {
 		t.Fatalf("event=%+v err=%v", event, err)
 	}
+	// All collection reasons and browser subrequests must use the same durable
+	// source budget, even when they are handled concurrently.
+	if _, err = db.Exec(`UPDATE source_domain_config SET max_requests_per_minute=1200 WHERE id=$1`, source); err != nil {
+		t.Fatal(err)
+	}
+	for i, reason := range []string{"manual", "scheduled", "discovery"} {
+		id := fmt.Sprintf("00000000-0000-4000-8000-%012d", 30+i)
+		_, err = scheduler.Submit(context.Background(), db, scheduler.Intent{ID: id, Organization: org, URL: origin + "/budget/" + reason, Reason: reason, IdempotencyKey: "budget-" + reason, CorrelationID: corr, SourceID: source, Category: "parts"})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	renderID := "00000000-0000-4000-8000-000000000040"
+	if _, err = db.Exec(`INSERT INTO crawl_request(id,organization_id,submitted_url,reason,state,idempotency_key,correlation_id,source_domain_id,category) VALUES($1,$2,$3,'manual','rendering','budget-render',$4,$5,'parts')`, renderID, org, origin+"/budget/render", corr, source); err != nil {
+		t.Fatal(err)
+	}
+	renderMessageID := "00000000-0000-4000-8000-000000000042"
+	if _, err = db.Exec(`INSERT INTO message_outbox(message_id,destination,message_type,organization_id,correlation_id,payload) VALUES($1,'render.page.requested.v1','render.page.requested',$2,$3,jsonb_build_object('payload',jsonb_build_object('crawl_request_id',$4::text,'source_domain_id',$5::text)))`, renderMessageID, org, corr, renderID, source); err != nil {
+		t.Fatal(err)
+	}
+	payload, _ := json.Marshal(map[string]any{"crawl_request_id": renderID, "source_domain_id": source, "url": origin + "/budget/render", "max_bytes": 4096, "deadline_ms": 5000})
+	render := messaging.Envelope{MessageID: "00000000-0000-4000-8000-000000000041", MessageType: "network.fetch.requested", SchemaVersion: 1, OccurredAt: time.Now(), Organization: org, CorrelationID: corr, CausationID: renderMessageID, Payload: payload}
+	renderDone := make(chan error, 1)
+	go func() {
+		reply, fetchErr := policy.ExecuteFetch(context.Background(), db, scheduler.NewBudget(2), render)
+		if fetchErr == nil && reply.Status != "ok" {
+			fetchErr = fmt.Errorf("renderer admission status: %s", reply.Status)
+		}
+		renderDone <- fetchErr
+	}()
+	if err = <-renderDone; err != nil {
+		t.Fatal(err)
+	}
+	deadline = time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		arrivalsMu.Lock()
+		count := len(arrivals)
+		arrivalsMu.Unlock()
+		if count == 4 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	arrivalsMu.Lock()
+	observedArrivals := append([]time.Time(nil), arrivals...)
+	arrivalsMu.Unlock()
+	if len(observedArrivals) != 4 {
+		t.Fatalf("shared budget saw %d requests, want 4", len(observedArrivals))
+	}
+	for i := 1; i < len(observedArrivals); i++ {
+		if observedArrivals[i].Sub(observedArrivals[i-1]) < 40*time.Millisecond {
+			t.Fatalf("shared budget pacing bypassed: %v", observedArrivals[i].Sub(observedArrivals[i-1]))
+		}
+	}
 	retryJob := "00000000-0000-4000-8000-000000000005"
 	_, err = scheduler.Submit(context.Background(), db, scheduler.Intent{ID: retryJob, Organization: org, URL: origin + "/rate", Reason: "manual", IdempotencyKey: "rate-key", CorrelationID: corr, SourceID: source, Category: "parts"})
 	if err != nil {
@@ -167,12 +230,38 @@ func TestCollectionWorkerPersistsFinderHandoff(t *testing.T) {
 			if err = db.QueryRow(`SELECT cooldown_until FROM source_domain_budget WHERE domain='localhost'`).Scan(&cooldown); err != nil || count != 1 || !next.Valid || cooldown.Before(next.Time) {
 				t.Fatalf("retry count=%d next=%v cooldown=%v err=%v", count, next, cooldown, err)
 			}
-			return
+			break
 		}
 		if state == "failed" {
 			t.Fatal("429 failed without retry")
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	t.Fatal("rate-limited request did not enter retry wait")
+	var attempt int
+	var retryState string
+	if err = db.QueryRow(`SELECT state,attempt_count FROM crawl_request WHERE id=$1`, retryJob).Scan(&retryState, &attempt); err != nil || retryState != "retry_wait" || attempt != 1 {
+		t.Fatalf("first retry state=%s attempt=%d err=%v", retryState, attempt, err)
+	}
+	for expected := 2; expected <= 4; expected++ {
+		// Advance the disposable clock gates without waiting for Retry-After.
+		if _, err = db.Exec(`UPDATE source_domain_budget SET cooldown_until='-infinity',next_allowed_at='-infinity' WHERE domain='localhost'`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.Exec(`UPDATE crawl_request SET next_attempt_at=now() WHERE id=$1`, retryJob); err != nil {
+			t.Fatal(err)
+		}
+		deadline = time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			if err = db.QueryRow(`SELECT state,attempt_count FROM crawl_request WHERE id=$1`, retryJob).Scan(&retryState, &attempt); err != nil {
+				t.Fatal(err)
+			}
+			if (expected < 4 && retryState == "retry_wait" && attempt == expected) || (expected == 4 && retryState == "failed" && attempt == 3) {
+				break
+			}
+			time.Sleep(25 * time.Millisecond)
+		}
+		if (expected < 4 && (retryState != "retry_wait" || attempt != expected)) || (expected == 4 && (retryState != "failed" || attempt != 3)) {
+			t.Fatalf("attempt %d: state=%s retries=%d", expected, retryState, attempt)
+		}
+	}
 }
