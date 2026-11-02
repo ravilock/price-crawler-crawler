@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -20,6 +21,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"price-crawler/services/crawler/internal/admin"
 	"price-crawler/services/crawler/internal/collection"
+	"price-crawler/services/crawler/internal/messaging"
 	"price-crawler/services/crawler/internal/scheduler"
 )
 
@@ -171,4 +173,30 @@ func TestControlledSourceToObservation(t *testing.T) {
 		t.Fatalf("control status %d", response.StatusCode)
 	}
 	runJob("00000000-0000-4000-8000-000000000005", "second", 12345, "unavailable")
+	// A render result that arrives after the request has advanced to finding is
+	// acknowledged as stale without creating another page or finder request.
+	lateJob := "00000000-0000-4000-8000-000000000006"
+	lateRender := "00000000-0000-4000-8000-000000000007"
+	lateURL := origin + "/products/offer-a"
+	if _, err = db.Exec(`INSERT INTO crawl_request(id,organization_id,submitted_url,reason,state,idempotency_key,correlation_id,source_domain_id,category) VALUES($1,$2,$3,'manual','finding','late-render',$4,$5,'parts')`, lateJob, org, lateURL, corr, source); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO message_outbox(message_id,destination,message_type,organization_id,correlation_id,payload) VALUES($1,'render.page.requested.v1','render.page.requested',$2,$3,jsonb_build_object('payload',jsonb_build_object('crawl_request_id',$4::text,'url',$5::text)))`, lateRender, org, corr, lateJob, lateURL); err != nil {
+		t.Fatal(err)
+	}
+	pagePayload, _ := json.Marshal(map[string]any{"crawl_request_id": lateJob, "requested_url": lateURL, "final_url": lateURL, "outcome": "partial", "observed_at": time.Now().UTC(), "parser_version": "1", "fields": []any{}})
+	lateResult := messaging.Envelope{MessageID: "00000000-0000-4000-8000-000000000008", MessageType: "page.parsed", SchemaVersion: 1, OccurredAt: time.Now().UTC(), Organization: org, CorrelationID: corr, CausationID: lateRender, Payload: pagePayload}
+	if err = collection.ApplyRendered(context.Background(), db, lateResult); err != nil {
+		t.Fatal(err)
+	}
+	var latePages, lateFinderRequests int
+	if err = db.QueryRow(`SELECT count(*) FROM page_fetch_outcome WHERE organization_id=$1 AND crawl_request_id=$2`, org, lateJob).Scan(&latePages); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`SELECT count(*) FROM message_outbox WHERE organization_id=$1 AND destination='product.find.requested.v1' AND payload->'payload'->>'crawl_request_id'=$2`, org, lateJob).Scan(&lateFinderRequests); err != nil {
+		t.Fatal(err)
+	}
+	if latePages != 0 || lateFinderRequests != 0 {
+		t.Fatalf("stale render produced page/finder effects: pages=%d finder=%d", latePages, lateFinderRequests)
+	}
 }
