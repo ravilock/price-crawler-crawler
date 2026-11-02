@@ -221,7 +221,13 @@ func TestSchedulerCoalescingAndRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	retried, err := scheduler.ScheduleRetry(context.Background(), db, org, first, "store.example", "rate_limited", "2", now, 0)
+	if _, err = db.Exec(`UPDATE crawl_request SET lease_token='00000000-0000-4000-8000-000000000123' WHERE id=$1`, first); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = scheduler.ScheduleRetry(context.Background(), db, org, first, "store.example", "timeout", "", now, 0, "00000000-0000-4000-8000-000000000124"); err == nil {
+		t.Fatal("stale worker scheduled a retry after losing its lease")
+	}
+	retried, err := scheduler.ScheduleRetry(context.Background(), db, org, first, "store.example", "rate_limited", "2", now, 0, "00000000-0000-4000-8000-000000000123")
 	if err != nil || !retried {
 		t.Fatalf("schedule retry: %v %v", retried, err)
 	}

@@ -49,7 +49,7 @@ func RetryDecision(outcome string, attempts int, retryAfter string, now time.Tim
 
 // ScheduleRetry atomically records the next collection attempt and a shared
 // domain cooldown. It rejects terminal or non-active requests.
-func ScheduleRetry(ctx context.Context, db *sql.DB, organization, requestID, domain, outcome, retryAfter string, now time.Time, jitter float64) (bool, error) {
+func ScheduleRetry(ctx context.Context, db *sql.DB, organization, requestID, domain, outcome, retryAfter string, now time.Time, jitter float64, lease string) (bool, error) {
 	if db == nil || organization == "" || requestID == "" || domain == "" || domain != strings.ToLower(domain) {
 		return false, errors.New("invalid retry request")
 	}
@@ -59,9 +59,12 @@ func ScheduleRetry(ctx context.Context, db *sql.DB, organization, requestID, dom
 	}
 	defer func() { _ = tx.Rollback() }()
 	var attempts int
-	var state, submittedURL string
-	if err = tx.QueryRowContext(ctx, `SELECT attempt_count,state,submitted_url FROM crawl_request WHERE organization_id=$1 AND id::text=$2 FOR UPDATE`, organization, requestID).Scan(&attempts, &state, &submittedURL); err != nil {
+	var state, submittedURL, currentLease string
+	if err = tx.QueryRowContext(ctx, `SELECT attempt_count,state,submitted_url,COALESCE(lease_token::text,'') FROM crawl_request WHERE organization_id=$1 AND id::text=$2 FOR UPDATE`, organization, requestID).Scan(&attempts, &state, &submittedURL, &currentLease); err != nil {
 		return false, err
+	}
+	if lease == "" || lease != currentLease {
+		return false, errors.New("crawl lease lost")
 	}
 	parsed, parseErr := url.Parse(submittedURL)
 	if parseErr != nil || parsed.Hostname() != domain {

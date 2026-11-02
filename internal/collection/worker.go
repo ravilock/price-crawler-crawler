@@ -118,7 +118,7 @@ func retry(ctx context.Context, db *sql.DB, j job, outcome, retryAfter string) e
 	if err != nil {
 		return err
 	}
-	_, err = scheduler.ScheduleRetry(ctx, db, j.Organization, j.ID, u.Hostname(), outcome, retryAfter, time.Now().UTC(), mathrand.Float64())
+	_, err = scheduler.ScheduleRetry(ctx, db, j.Organization, j.ID, u.Hostname(), outcome, retryAfter, time.Now().UTC(), mathrand.Float64(), j.Lease)
 	return err
 }
 func finishFailure(ctx context.Context, db *sql.DB, j job, outcome string) error {
