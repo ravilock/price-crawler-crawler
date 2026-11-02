@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "source-alerts-read-requested.v1.schema.json",
+  "allOf": [
+    {
+      "$ref": "message-envelope.v1.schema.json"
+    },
+    {
+      "properties": {
+        "message_type": {
+          "const": "source.alerts.read.requested"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "actor": {
+              "type": "object",
+              "properties": {
+                "subject": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "role": {
+                  "const": "administrator"
+                }
+              },
+              "required": [
+                "subject",
+                "role"
+              ],
+              "additionalProperties": false
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "actor",
+            "limit"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

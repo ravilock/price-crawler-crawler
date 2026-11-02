@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "network-fetch-result.v1.schema.json",
+  "allOf": [
+    {
+      "$ref": "message-envelope.v1.schema.json"
+    },
+    {
+      "properties": {
+        "message_type": {
+          "const": "network.fetch.result"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "enum": [
+                "ok",
+                "blocked",
+                "not_ready",
+                "failed"
+              ]
+            },
+            "http_status": {
+              "type": "integer",
+              "minimum": 200,
+              "maximum": 599
+            },
+            "content_type": {
+              "type": "string",
+              "maxLength": 256
+            },
+            "location": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "body_base64": {
+              "type": "string",
+              "maxLength": 699052,
+              "pattern": "^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "status": {
+                    "const": "ok"
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              },
+              "then": {
+                "required": [
+                  "http_status",
+                  "content_type",
+                  "location",
+                  "body_base64"
+                ]
+              },
+              "else": {
+                "not": {
+                  "anyOf": [
+                    {
+                      "required": [
+                        "http_status"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "content_type"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "location"
+                      ]
+                    },
+                    {
+                      "required": [
+                        "body_base64"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

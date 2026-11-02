@@ -17,7 +17,7 @@ import (
 	"github.com/lib/pq"
 )
 
-const latestVersion = 4
+const latestVersion = 10
 
 func migrationFailure(output []byte, databaseURL string) error {
 	diagnostic := strings.ReplaceAll(string(output), databaseURL, "[database URL redacted]")

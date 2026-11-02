@@ -11,8 +11,11 @@ import (
 	"time"
 
 	"price-crawler/services/crawler/internal/admin"
+	"price-crawler/services/crawler/internal/collection"
 	"price-crawler/services/crawler/internal/config"
 	"price-crawler/services/crawler/internal/observability"
+	"price-crawler/services/crawler/internal/policy"
+	"price-crawler/services/crawler/internal/scheduler"
 
 	_ "github.com/lib/pq"
 )
@@ -30,7 +33,7 @@ func verifyMigration(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT count(*), COALESCE(max(version),0), COALESCE(bool_or(dirty),false) FROM public.schema_migrations`).Scan(&count, &version, &dirty); err != nil {
 		return errors.New("cannot read crawler migration state")
 	}
-	if count != 1 || dirty || version != 4 {
+	if count != 1 || dirty || version != 10 {
 		return fmt.Errorf("crawler migration state is not clean (version=%d, dirty=%t, records=%d)", version, dirty, count)
 	}
 	return nil
@@ -90,6 +93,43 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 	go func() { defer close(relayDone); admin.RunAuditRelay(monitorCtx, db, cfg.RabbitMQURL, logger) }()
 	defer func() { stopMonitors(); <-adminDone; <-relayDone }()
 
+	schedulerDone := make(chan struct{})
+	go func() {
+		defer close(schedulerDone)
+		scheduler.RunCommandConsumer(monitorCtx, db, cfg.RabbitMQURL, os.Getenv("CRAWL_COMMAND_PUBLISHER"), logger)
+	}()
+	defer func() { stopMonitors(); <-schedulerDone }()
+	networkDone := make(chan struct{})
+	commonBudget := scheduler.NewBudget(cfg.WorkerConcurrency)
+	go func() {
+		defer close(networkDone)
+		policy.RunFetchConsumer(monitorCtx, db, commonBudget, cfg.RabbitMQURL, os.Getenv("NETWORK_FETCH_PUBLISHER"), logger)
+	}()
+	defer func() { stopMonitors(); <-networkDone }()
+	notificationDone := make(chan struct{})
+	go func() {
+		defer close(notificationDone)
+		policy.RunNotificationReader(monitorCtx, db, cfg.RabbitMQURL, os.Getenv("SOURCE_ADMIN_IDENTITY_FILE"), logger)
+	}()
+	defer func() { stopMonitors(); <-notificationDone }()
+	collectionDone := make(chan struct{})
+	go func() {
+		defer close(collectionDone)
+		collection.Run(monitorCtx, db, commonBudget, cfg.WorkerConcurrency, logger)
+	}()
+	defer func() { stopMonitors(); <-collectionDone }()
+	finderDone := make(chan struct{})
+	go func() {
+		defer close(finderDone)
+		collection.RunFinderResults(monitorCtx, db, cfg.RabbitMQURL, os.Getenv("FINDER_RESULT_PUBLISHER"), logger)
+	}()
+	defer func() { stopMonitors(); <-finderDone }()
+	renderDone := make(chan struct{})
+	go func() {
+		defer close(renderDone)
+		collection.RunRenderResults(monitorCtx, db, cfg.RabbitMQURL, os.Getenv("RENDERER_RESULT_PUBLISHER"), logger)
+	}()
+	defer func() { stopMonitors(); <-renderDone }()
 	pool := observability.NewWorkerPool(cfg.WorkerConcurrency)
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, _ *http.Request) {

@@ -272,3 +272,20 @@ with confirms and reports exhausted retries for operator recovery.
 Migration 4 adds source review, idempotency receipts, and audit data. Existing version-3
 volumes are upgraded by `make migrate.up` without resets. It does not modify the
 historical 1–3 migration files.
+
+The controlled rendering profile places the renderer on an internal network
+shared only with RabbitMQ. The crawler retains source access and must mediate
+browser requests. The network-fetch consumer and browser worker remain pending.
+
+The scheduler's database-backed domain reservation uses a durable lease that
+outlives an unexpectedly lost PostgreSQL session. Every request using this
+reservation must use the same context for its network operation and stop by
+its deadline (at most two minutes); the lease adds a one-second recovery margin.
+Apply the packaged migrations before starting an updated crawler. The runtime
+scheduler and admission handler are not yet wired to this reservation.
+
+`CRAWL_COMMAND_PUBLISHER` names the AMQP-authenticated user allowed to publish
+crawl intents; leave it empty to disable the consumer. The broker must enforce
+publisher identities and the publisher must set AMQP `UserId` to its own
+credential. The consumer persists accepted intents only; collection execution,
+category authorization, robots checks, and retry worker integration remain pending.

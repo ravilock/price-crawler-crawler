@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "network-fetch-requested.v1.schema.json",
+  "allOf": [
+    {
+      "$ref": "message-envelope.v1.schema.json"
+    },
+    {
+      "properties": {
+        "message_type": {
+          "const": "network.fetch.requested"
+        },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "crawl_request_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "source_domain_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1,
+              "maxLength": 2048
+            },
+            "max_bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 524288
+            },
+            "deadline_ms": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30000
+            }
+          },
+          "required": [
+            "crawl_request_id",
+            "source_domain_id",
+            "url",
+            "max_bytes",
+            "deadline_ms"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

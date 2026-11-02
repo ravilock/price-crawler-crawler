@@ -1,6 +1,7 @@
 name: ${COMPOSE_PROJECT_NAME:-price-crawler-local}
 services:
   rabbitmq:
+    networks: [default, renderer-isolated]
     image: rabbitmq:3.13-management-alpine
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-price}
@@ -64,6 +65,7 @@ services:
     - collection
     - rendered
   renderer-parser:
+    networks: [renderer-isolated]
     image: ghcr.io/${GHCR_OWNER:?Set GHCR_OWNER}/price-crawler-renderer-parser:${RENDERER_PARSER_IMAGE_TAG-ddaf34498116770221c311bc96df249c3d036beb}
     environment:
       MOCK_SOURCE_ORIGIN: http://mock-store:8080
@@ -120,6 +122,10 @@ services:
     build:
       context: .
     environment:
+      RENDERER_RESULT_PUBLISHER: ${RENDERER_RESULT_PUBLISHER-}
+      FINDER_RESULT_PUBLISHER: ${FINDER_RESULT_PUBLISHER-}
+      NETWORK_FETCH_PUBLISHER: ${NETWORK_FETCH_PUBLISHER-}
+      CRAWL_COMMAND_PUBLISHER: ${CRAWL_COMMAND_PUBLISHER-}
       SOURCE_ADMIN_IDENTITY_JSON: ${SOURCE_ADMIN_IDENTITY_JSON-}
       SOURCE_ADMIN_SUPPORTED_INTEGRATIONS: ${SOURCE_ADMIN_SUPPORTED_INTEGRATIONS-}
       MOCK_SOURCE_ORIGIN: http://mock-store:8080
@@ -194,3 +200,7 @@ volumes:
   rabbit-data: {}
   keycloak-data: {}
   crawler-data: {}
+
+networks:
+  renderer-isolated:
+    internal: true
