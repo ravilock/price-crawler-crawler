@@ -72,3 +72,41 @@ func TestPaymentEvidenceAndUnsupportedPagesStayTyped(t *testing.T) {
 		t.Fatalf("unsupported result must remain typed: page=%+v err=%v", page, err)
 	}
 }
+
+func TestPatolocoSchemaMicrodataCashEvidence(t *testing.T) {
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	body := `<html><head><title>GPU</title></head><body>
+<h1><span itemprop="name">Placa de Video RTX 5080</span></h1>
+<span itemprop="priceCurrency" content="BRL">R$</span>
+<span itemprop="price" content="11427.04">11.427,04</span><small>à vista</small>
+<span>no PIX ou Boleto Bancário</span><link itemprop="availability" href="http://schema.org/InStock" />
+</body></html>`
+	fetch := &fakeFetcher{responses: map[string]policy.FetchResult{"https://patoloco.com.br/gpu": {Status: 200, ContentType: "text/html; charset=utf-8", Body: []byte(body)}}}
+	page, err := Collect(context.Background(), fetch, "https://patoloco.com.br/gpu", now)
+	if err != nil || page.Outcome != "partial" {
+		t.Fatalf("page=%+v err=%v", page, err)
+	}
+	want := map[string]string{"title": "Placa de Video RTX 5080", "price": "11427.04", "currency": "BRL", "availability": "http://schema.org/InStock", "payment_method": "cash"}
+	for name, value := range want {
+		found := false
+		for _, field := range page.Fields {
+			if field.Name == name && field.RawValue == value {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("missing extracted %s=%q from %+v", name, value, page.Fields)
+		}
+	}
+}
+
+func TestPatolocoPaymentHeuristicDoesNotTrustOtherHostsOrInstallments(t *testing.T) {
+	page := &Page{Fields: []Field{}}
+	body := []byte(`<span itemprop="price" content="999.99">999,99</span> em até 12x`)
+	collectPatolocoPayment("https://store.example/product", body, page)
+	collectPatolocoPayment("https://patoloco.com.br/product", body, page)
+	if len(page.Fields) != 0 {
+		t.Fatalf("unverified payment method inferred: %+v", page.Fields)
+	}
+}

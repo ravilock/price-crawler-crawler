@@ -113,6 +113,7 @@ func Collect(ctx context.Context, fetcher Fetcher, rawURL string, now time.Time)
 		if err = extract(response.Body, &result); err != nil {
 			return result, err
 		}
+		collectPatolocoPayment(rawURL, response.Body, &result)
 		if result.Title == "" && len(result.Fields) == 0 && len(result.StructuredData) == 0 {
 			result.Outcome = "unsupported_page"
 		} else {
@@ -127,6 +128,13 @@ func extract(body []byte, page *Page) error {
 	tokenizer := html.NewTokenizer(bytes.NewReader(body))
 	inTitle := false
 	inJSON := false
+	itemProp, itemPropTag := "", ""
+	var itemPropText strings.Builder
+	appendItemProp := func(name, value, ref string) {
+		if len(page.Fields) < 500 && strings.TrimSpace(value) != "" {
+			page.Fields = append(page.Fields, Field{Name: name, RawValue: truncate(strings.TrimSpace(value), 1024), EvidenceRef: ref, SourceKind: "dom"})
+		}
+	}
 	for {
 		tt := tokenizer.Next()
 		switch tt {
@@ -138,6 +146,27 @@ func extract(body []byte, page *Page) error {
 		case html.StartTagToken, html.SelfClosingTagToken:
 			token := tokenizer.Token()
 			name := strings.ToLower(token.Data)
+			var prop, propValue, propRef string
+			propTag := name
+			for _, a := range token.Attr {
+				switch strings.ToLower(a.Key) {
+				case "itemprop":
+					prop = strings.ToLower(strings.TrimSpace(a.Val))
+				case "content":
+					propValue = a.Val
+				case "href":
+					propValue = a.Val
+				}
+			}
+			if mapped, ok := map[string]string{"name": "title", "description": "description", "mpn": "manufacturer_model", "brand": "brand", "gtin": "gtin", "gtin8": "gtin", "gtin12": "gtin", "gtin13": "gtin", "gtin14": "gtin", "price": "price", "pricecurrency": "currency", "availability": "availability"}[prop]; ok {
+				propRef = "itemprop:" + prop
+				if propValue != "" {
+					appendItemProp(mapped, propValue, propRef)
+				} else {
+					itemProp, itemPropTag = mapped, propTag
+					itemPropText.Reset()
+				}
+			}
 			if name == "title" {
 				inTitle = true
 			}
@@ -169,6 +198,9 @@ func extract(body []byte, page *Page) error {
 			}
 		case html.TextToken:
 			token := tokenizer.Token()
+			if itemProp != "" {
+				itemPropText.WriteString(token.Data)
+			}
 			if inTitle && page.Title == "" {
 				page.Title = truncate(strings.TrimSpace(token.Data), 1000)
 			}
@@ -185,6 +217,11 @@ func extract(body []byte, page *Page) error {
 			}
 			if strings.EqualFold(token.Data, "script") {
 				inJSON = false
+			}
+			if itemProp != "" && strings.EqualFold(token.Data, itemPropTag) {
+				appendItemProp(itemProp, itemPropText.String(), "itemprop:"+itemPropTag)
+				itemProp, itemPropTag = "", ""
+				itemPropText.Reset()
 			}
 		}
 	}
