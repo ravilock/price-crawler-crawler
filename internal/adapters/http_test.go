@@ -45,3 +45,30 @@ func TestTerminalAndRetryableOutcomes(t *testing.T) {
 		}
 	}
 }
+
+func TestPaymentEvidenceAndUnsupportedPagesStayTyped(t *testing.T) {
+	now := time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC)
+	for _, tc := range []struct {
+		name, evidence, want string
+	}{{"cash", "cash", "cash"}, {"installment", "installment", "installment"}} {
+		t.Run(tc.name, func(t *testing.T) {
+			html := `<meta property="product:price:amount" content="100.00"><meta property="product:payment_method" content="` + tc.evidence + `">`
+			fetch := &fakeFetcher{responses: map[string]policy.FetchResult{"https://store.example/a": {Status: 200, ContentType: "text/html; charset=utf-8", Body: []byte(html)}}}
+			page, err := Collect(context.Background(), fetch, "https://store.example/a", now)
+			if err != nil || page.Outcome != "partial" || len(page.Fields) != 2 {
+				t.Fatalf("page=%+v err=%v", page, err)
+			}
+			if page.Fields[1].Name != "payment_method" || page.Fields[1].RawValue != tc.want {
+				t.Fatalf("payment evidence=%+v", page.Fields[1])
+			}
+			if page.EvidenceExpiresAt.After(now.Add(30*24*time.Hour)) || len(page.EvidenceExcerpt) > 8192 || page.EvidenceHash == "" {
+				t.Fatalf("evidence bounds not enforced: %+v", page)
+			}
+		})
+	}
+	fetch := &fakeFetcher{responses: map[string]policy.FetchResult{"https://store.example/a": {Status: 200, ContentType: "text/html", Body: []byte("<html><body>layout with no product information</body></html>")}}}
+	page, err := Collect(context.Background(), fetch, "https://store.example/a", now)
+	if err != nil || page.Outcome != "unsupported_page" {
+		t.Fatalf("unsupported result must remain typed: page=%+v err=%v", page, err)
+	}
+}
