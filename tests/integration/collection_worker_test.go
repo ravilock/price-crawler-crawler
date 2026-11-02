@@ -264,4 +264,26 @@ func TestCollectionWorkerPersistsFinderHandoff(t *testing.T) {
 			t.Fatalf("attempt %d: state=%s retries=%d", expected, retryState, attempt)
 		}
 	}
+	if _, err = db.Exec(`UPDATE page_fetch_outcome SET evidence_expires_at=observed_at+interval '1 second' WHERE organization_id=$1 AND crawl_request_id=$2 AND bounded_evidence IS NOT NULL`, org, job); err != nil {
+		t.Fatal(err)
+	}
+	expired, err := collection.ExpireEvidence(context.Background(), db, time.Now().UTC().Add(2*time.Second), 10)
+	if err != nil || expired != 1 {
+		t.Fatalf("expired=%d err=%v", expired, err)
+	}
+	var evidenceHash, excerpt sql.NullString
+	var evidenceExpiry sql.NullTime
+	if err = db.QueryRow(`SELECT evidence_hash,bounded_evidence,evidence_expires_at FROM page_fetch_outcome WHERE organization_id=$1 AND crawl_request_id=$2`, org, job).Scan(&evidenceHash, &excerpt, &evidenceExpiry); err != nil || evidenceHash.Valid || excerpt.Valid || evidenceExpiry.Valid {
+		t.Fatalf("expired evidence remains accessible: hash=%v excerpt=%v expiry=%v err=%v", evidenceHash, excerpt, evidenceExpiry, err)
+	}
+	var observationCount, provenance int
+	if err = db.QueryRow(`SELECT count(*) FROM price_availability_observation WHERE organization_id=$1 AND crawl_request_id=$2`, org, job).Scan(&observationCount); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.QueryRow(`SELECT count(*) FROM product_information_candidate WHERE organization_id=$1 AND crawl_request_id=$2 AND field_provenance <> '{}'::jsonb`, org, job).Scan(&provenance); err != nil {
+		t.Fatal(err)
+	}
+	if observationCount != 1 || provenance != 1 {
+		t.Fatalf("retention deleted lifetime records: observations=%d provenance=%d", observationCount, provenance)
+	}
 }

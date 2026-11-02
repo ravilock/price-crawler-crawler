@@ -118,6 +118,12 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		collection.Run(monitorCtx, db, commonBudget, cfg.WorkerConcurrency, logger)
 	}()
 	defer func() { stopMonitors(); <-collectionDone }()
+	evidenceRetentionDone := make(chan struct{})
+	go func() {
+		defer close(evidenceRetentionDone)
+		collection.RunEvidenceRetention(monitorCtx, db, time.Hour, 100, logger)
+	}()
+	defer func() { stopMonitors(); <-evidenceRetentionDone }()
 	finderDone := make(chan struct{})
 	go func() {
 		defer close(finderDone)
