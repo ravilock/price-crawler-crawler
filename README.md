@@ -281,11 +281,13 @@ The scheduler's database-backed domain reservation uses a durable lease that
 outlives an unexpectedly lost PostgreSQL session. Every request using this
 reservation must use the same context for its network operation and stop by
 its deadline (at most two minutes); the lease adds a one-second recovery margin.
-Apply the packaged migrations before starting an updated crawler. The runtime
-scheduler and admission handler are not yet wired to this reservation.
+Apply the packaged migrations before starting an updated crawler.
 
 `CRAWL_COMMAND_PUBLISHER` names the AMQP-authenticated user allowed to publish
-crawl intents; leave it empty to disable the consumer. The broker must enforce
-publisher identities and the publisher must set AMQP `UserId` to its own
-credential. The consumer persists accepted intents only; collection execution,
-category authorization, robots checks, and retry worker integration remain pending.
+crawl intents. `RESULT_READ_PUBLISHER` names that same trusted user API identity
+for the tenant-scoped `collection.results.read.requested.v1` request/reply
+consumer. The broker must enforce publisher identities and set AMQP `UserId` to
+the publisher credential. End-user reads are limited to requests associated
+with the authenticated subject. The crawler outbox relay retries failed durable
+event publication up to five times with bounded delay, then records the message
+for operator recovery.

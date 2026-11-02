@@ -35,7 +35,7 @@ func (e Envelope) Validate() error {
 	if !uuidPattern.MatchString(e.MessageID) {
 		return errors.New("message_id must be a UUID")
 	}
-	if !messageTypePattern.MatchString(e.MessageType) && e.MessageType != "render.page.requested" && e.MessageType != "page.parsed" && e.MessageType != "product.information.found" && e.MessageType != "collection.result" && e.MessageType != "product.find.requested" && e.MessageType != "source.alerts.read.requested" && e.MessageType != "source.alerts.read.result" && e.MessageType != "crawl.scoped.requested" && e.MessageType != "crawl.requested" && e.MessageType != "source.admin.command" && e.MessageType != "source.admin.result" && e.MessageType != "audit.event.recorded" && e.MessageType != "network.fetch.requested" && e.MessageType != "network.fetch.result" {
+	if !messageTypePattern.MatchString(e.MessageType) && e.MessageType != "render.page.requested" && e.MessageType != "page.parsed" && e.MessageType != "product.information.found" && e.MessageType != "collection.result" && e.MessageType != "product.find.requested" && e.MessageType != "source.alerts.read.requested" && e.MessageType != "source.alerts.read.result" && e.MessageType != "crawl.scoped.requested" && e.MessageType != "crawl.requested" && e.MessageType != "source.admin.command" && e.MessageType != "source.admin.result" && e.MessageType != "audit.event.recorded" && e.MessageType != "network.fetch.requested" && e.MessageType != "network.fetch.result" && e.MessageType != "collection.results.read.requested" && e.MessageType != "collection.results.read.result" {
 		return errors.New("message_type must be a supported dotted message name")
 	}
 	if e.SchemaVersion != 1 {

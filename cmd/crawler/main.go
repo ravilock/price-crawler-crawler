@@ -15,6 +15,7 @@ import (
 	"price-crawler/services/crawler/internal/config"
 	"price-crawler/services/crawler/internal/observability"
 	"price-crawler/services/crawler/internal/policy"
+	"price-crawler/services/crawler/internal/results"
 	"price-crawler/services/crawler/internal/scheduler"
 
 	_ "github.com/lib/pq"
@@ -33,7 +34,7 @@ func verifyMigration(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT count(*), COALESCE(max(version),0), COALESCE(bool_or(dirty),false) FROM public.schema_migrations`).Scan(&count, &version, &dirty); err != nil {
 		return errors.New("cannot read crawler migration state")
 	}
-	if count != 1 || dirty || version != 10 {
+	if count != 1 || dirty || version != 11 {
 		return fmt.Errorf("crawler migration state is not clean (version=%d, dirty=%t, records=%d)", version, dirty, count)
 	}
 	return nil
@@ -130,6 +131,12 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		collection.RunFinderResults(monitorCtx, db, cfg.RabbitMQURL, os.Getenv("FINDER_RESULT_PUBLISHER"), logger)
 	}()
 	defer func() { stopMonitors(); <-finderDone }()
+	resultReaderDone := make(chan struct{})
+	go func() {
+		defer close(resultReaderDone)
+		results.RunReadConsumer(monitorCtx, db, cfg.RabbitMQURL, os.Getenv("RESULT_READ_PUBLISHER"), logger)
+	}()
+	defer func() { stopMonitors(); <-resultReaderDone }()
 	renderDone := make(chan struct{})
 	go func() {
 		defer close(renderDone)

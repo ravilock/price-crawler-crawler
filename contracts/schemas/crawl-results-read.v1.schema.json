@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "crawl-results-read.v1.schema.json",
+  "title": "Crawler result reads v1",
+  "oneOf": [
+    {
+      "allOf": [
+        { "$ref": "message-envelope.v1.schema.json" },
+        {
+          "properties": {
+            "message_type": { "const": "collection.results.read.requested" },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "actor": {
+                  "type": "object",
+                  "properties": {
+                    "subject": { "type": "string", "minLength": 1, "maxLength": 200 },
+                    "role": { "enum": ["administrator", "manager", "end_user", "auditor"] }
+                  },
+                  "required": ["subject", "role"],
+                  "additionalProperties": false
+                },
+                "request_id": { "type": "string", "format": "uuid" },
+                "cursor": { "type": ["string", "null"], "maxLength": 1000 },
+                "limit": { "type": "integer", "minimum": 1, "maximum": 100 }
+              },
+              "required": ["actor", "limit"],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "allOf": [
+        { "$ref": "message-envelope.v1.schema.json" },
+        {
+          "properties": {
+            "message_type": { "const": "collection.results.read.result" },
+            "payload": {
+              "type": "object",
+              "properties": {
+                "status": { "enum": ["ok", "not_found", "forbidden", "invalid", "expired", "not_ready"] },
+                "items": {
+                  "type": "array",
+                  "maxItems": 100,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "request_id": { "type": "string", "format": "uuid" },
+                      "state": { "enum": ["queued", "fetching", "rendering", "finding", "completed", "retry_wait", "failed", "paused"] },
+                      "source_id": { "type": "string", "format": "uuid" },
+                      "source_domain": { "type": "string", "minLength": 1, "maxLength": 253 },
+                      "price_status": { "enum": ["verified", "missing"] },
+                      "price_cents": { "type": ["integer", "null"], "minimum": 0 },
+                      "availability": { "enum": ["available", "unavailable", "unknown"] },
+                      "observed_at": { "type": ["string", "null"], "format": "date-time" }
+                    },
+                    "required": ["request_id", "state", "source_id", "source_domain", "price_status", "price_cents", "availability", "observed_at"],
+                    "additionalProperties": false
+                  }
+                },
+                "next_cursor": { "type": ["string", "null"], "maxLength": 1000 },
+                "error": {
+                  "type": "object",
+                  "properties": { "code": { "type": "string", "minLength": 1, "maxLength": 100 } },
+                  "required": ["code"],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["status"],
+              "additionalProperties": false,
+              "allOf": [
+                { "if": { "properties": { "status": { "const": "ok" } }, "required": ["status"] }, "then": { "required": ["items", "next_cursor"] } },
+                { "if": { "properties": { "status": { "enum": ["not_found", "forbidden", "invalid", "expired", "not_ready"] } }, "required": ["status"] }, "then": { "required": ["error"] } }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

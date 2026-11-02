@@ -97,7 +97,7 @@ func HandleCommand(ctx context.Context, db *sql.DB, raw []byte, publisher, allow
 			return Receipt{}, ErrInvalidCommand
 		}
 	}
-	return Submit(ctx, db, Intent{ID: c.CrawlRequestID, Organization: e.Organization, URL: normalized, Reason: c.Reason, IdempotencyKey: c.IdempotencyKey, CorrelationID: e.CorrelationID, SourceID: c.SourceID, Category: c.Category})
+	return Submit(ctx, db, Intent{ID: c.CrawlRequestID, Organization: e.Organization, URL: normalized, Reason: c.Reason, IdempotencyKey: c.IdempotencyKey, CorrelationID: e.CorrelationID, SourceID: c.SourceID, Category: c.Category, RequesterID: c.RequesterID})
 }
 
 // RunCommandConsumer reconnects after broker failures; invalid commands are
