@@ -85,7 +85,8 @@ make app.up WORKFLOW_PROFILES="collection"
 # Or docker compose --profile collection --profile app up --build -d
 ```
 
-The controlled mock-source profile uses the public `v0.1.0-rc.1` image. Set a nonempty
+The controlled mock-source profile uses the published commit-tagged image
+`ghcr.io/ravilock/price-crawler-mock-store:6c1fbfc828ced8dc62ae5b570d607f4b007651f4`. Set a nonempty
 `MOCK_CONTROL_TOKEN` in untracked local configuration; controls bind only to loopback.
 Source origin inside Compose is `http://mock-store:8080`. Overrides persist in the
 project-scoped `mock-store-data` volume, which normal down retains. Dependency-only
@@ -99,9 +100,9 @@ Official providers: Docker Official Images for `postgres:16-alpine` (PostgreSQL)
 in this Compose file are started. These explicit infrastructure tags were checked against
 the registry on 2026-10-27. Project sibling defaults, also verified available on that date:
 
-- `ghcr.io/ravilock/price-crawler-data-finder:2ea7fa5f575a837098e3ef0b39159fbf709777ee`
+- `ghcr.io/ravilock/price-crawler-data-finder:cbb9e1088a36055d9812d28e07dc0083d000cae8`
 - `ghcr.io/ravilock/price-crawler-renderer-parser:ddaf34498116770221c311bc96df249c3d036beb`
-- `ghcr.io/ravilock/price-crawler-user-api:06b665889d7087c14eca709497edb57c046f3a26`
+- `ghcr.io/ravilock/price-crawler-user-api:9f11c648a2e9059599ed8e5af3d7b00efb10299e`
 
 These are published baseline commits using v1 messaging/configuration conventions. No
 integrated readiness/business-workflow validation is claimed for this selection. `make`
