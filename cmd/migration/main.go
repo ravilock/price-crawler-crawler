@@ -15,9 +15,10 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"price-crawler/services/crawler/internal/migrationversion"
 )
 
-const latestVersion = 10
+const latestVersion = migrationversion.Expected
 
 func migrationFailure(output []byte, databaseURL string) error {
 	diagnostic := strings.ReplaceAll(string(output), databaseURL, "[database URL redacted]")

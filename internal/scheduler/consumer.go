@@ -83,13 +83,24 @@ func HandleCommand(ctx context.Context, db *sql.DB, raw []byte, publisher, allow
 	}
 	parsed, _ := url.Parse(normalized)
 	var approved bool
-	if err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM source_domain_config s JOIN source_admin_review r ON r.organization_id=s.organization_id AND r.source_domain_id=s.id WHERE s.organization_id=$1 AND s.domain=$2 AND s.is_active AND r.state='approved' AND jsonb_array_length(s.approved_categories)>0)`, e.Organization, parsed.Hostname()).Scan(&approved); err != nil {
-		return Receipt{}, err
-	}
-	if !approved {
-		return Receipt{}, ErrInvalidCommand
-	}
-	if c.SourceID != "" {
+	if c.SourceID == "" {
+		// Manual URL submissions can be routed automatically only when the
+		// approved source has one unambiguous category. Multi-category sources
+		// require an explicit scoped request.
+		err = db.QueryRowContext(ctx, `SELECT s.id::text,s.approved_categories->>0 FROM source_domain_config s JOIN source_admin_review r ON r.organization_id=s.organization_id AND r.source_domain_id=s.id WHERE s.organization_id=$1 AND s.domain=$2 AND s.is_active AND r.state='approved' AND jsonb_array_length(s.approved_categories)=1`, e.Organization, parsed.Hostname()).Scan(&c.SourceID, &c.Category)
+		if errors.Is(err, sql.ErrNoRows) {
+			return Receipt{}, ErrInvalidCommand
+		}
+		if err != nil {
+			return Receipt{}, err
+		}
+	} else {
+		if err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM source_domain_config s JOIN source_admin_review r ON r.organization_id=s.organization_id AND r.source_domain_id=s.id WHERE s.organization_id=$1 AND s.domain=$2 AND s.is_active AND r.state='approved' AND jsonb_array_length(s.approved_categories)>0)`, e.Organization, parsed.Hostname()).Scan(&approved); err != nil {
+			return Receipt{}, err
+		}
+		if !approved {
+			return Receipt{}, ErrInvalidCommand
+		}
 		if err = db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM source_domain_config s JOIN source_admin_review r ON r.organization_id=s.organization_id AND r.source_domain_id=s.id WHERE s.organization_id=$1 AND s.id::text=$2 AND s.domain=$3 AND s.is_active AND r.state='approved' AND s.approved_categories ? $4)`, e.Organization, c.SourceID, parsed.Hostname(), c.Category).Scan(&approved); err != nil {
 			return Receipt{}, err
 		}

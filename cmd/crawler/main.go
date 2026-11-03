@@ -13,6 +13,7 @@ import (
 	"price-crawler/services/crawler/internal/admin"
 	"price-crawler/services/crawler/internal/collection"
 	"price-crawler/services/crawler/internal/config"
+	"price-crawler/services/crawler/internal/migrationversion"
 	"price-crawler/services/crawler/internal/observability"
 	"price-crawler/services/crawler/internal/policy"
 	"price-crawler/services/crawler/internal/results"
@@ -34,7 +35,7 @@ func verifyMigration(ctx context.Context, db *sql.DB) error {
 	if err := db.QueryRowContext(ctx, `SELECT count(*), COALESCE(max(version),0), COALESCE(bool_or(dirty),false) FROM public.schema_migrations`).Scan(&count, &version, &dirty); err != nil {
 		return errors.New("cannot read crawler migration state")
 	}
-	if count != 1 || dirty || version != 11 {
+	if count != 1 || dirty || version != migrationversion.Expected {
 		return fmt.Errorf("crawler migration state is not clean (version=%d, dirty=%t, records=%d)", version, dirty, count)
 	}
 	return nil
