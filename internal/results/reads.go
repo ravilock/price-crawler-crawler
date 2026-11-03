@@ -35,7 +35,7 @@ type Item struct {
 }
 type Page struct {
 	Status     string  `json:"status"`
-	Items      []Item  `json:"items,omitempty"`
+	Items      []Item  `json:"items"`
 	NextCursor *string `json:"next_cursor"`
 	Error      *struct {
 		Code string `json:"code"`
@@ -62,7 +62,7 @@ type cursor struct {
 func failure(status, code string) Page {
 	return Page{Status: status, Error: &struct {
 		Code string `json:"code"`
-	}{Code: code}}
+	}{Code: code}, Items: []Item{}}
 }
 
 func validActor(actor Actor) bool {
