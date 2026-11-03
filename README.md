@@ -104,12 +104,14 @@ the registry on 2026-10-27. Project sibling defaults, also verified available on
 - `ghcr.io/ravilock/price-crawler-renderer-parser:ddaf34498116770221c311bc96df249c3d036beb`
 - `ghcr.io/ravilock/price-crawler-user-api:9f11c648a2e9059599ed8e5af3d7b00efb10299e`
 
-These are published baseline commits using v1 messaging/configuration conventions. No
-integrated readiness/business-workflow validation is claimed for this selection. `make`
-startup warns that compatibility has not been established. An override is permitted, but
-must remain a published explicit version or commit tag; changing a tag does not establish
-content compatibility. Missing tags fail visibly. Review and record actual image content
-and acceptance evidence before claiming compatibility.
+These are published project images. The controlled-source T121 acceptance passed on
+2026-11-02 for the crawler, finder, user-api and fixture combination using the image refs
+listed in [the workspace acceptance record](../../specs/001-price-intelligence/quickstart.md).
+That evidence does not cover renderer/browser or the full platform workflows. `make`
+startup still warns that general compatibility has not been established. An override is
+permitted, but must remain a published explicit version or commit tag; changing a tag does
+not establish content compatibility. Missing tags fail visibly. Review and record actual
+image content and acceptance evidence before claiming broader compatibility.
 
 ## Source changes, verification and shutdown
 
