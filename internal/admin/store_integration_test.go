@@ -76,10 +76,39 @@ func TestStoreTransactions(t *testing.T) {
 	if _, err = db.ExecContext(ctx, `UPDATE source_admin_audit SET action=action`); err == nil {
 		t.Fatal("audit update accepted")
 	}
-	for _, table := range []string{"source_admin_audit", "message_outbox", "source_admin_receipt"} {
+	// The approved review emits both its audit event and the durable
+	// source-policy event that invalidates catalog projections.
+	var destination, messageType string
+	var payload []byte
+	if err = db.QueryRowContext(ctx, `SELECT destination,message_type,payload FROM message_outbox WHERE message_type='source.policy.changed'`).Scan(&destination, &messageType, &payload); err != nil {
+		t.Fatalf("source policy event: %v", err)
+	}
+	if destination != "source.policy.changed.v1" {
+		t.Fatalf("source policy destination %q", destination)
+	}
+	var change struct {
+		SourceID               string `json:"source_id"`
+		SourceRevision         int64  `json:"source_revision"`
+		FreshnessWindowSeconds int    `json:"freshness_window_seconds"`
+		Active                 bool   `json:"active"`
+	}
+	var event messaging.Envelope
+	if err = json.Unmarshal(payload, &event); err != nil {
+		t.Fatal(err)
+	}
+	if event.MessageType != "source.policy.changed" || event.Organization != org || event.CausationID == "" {
+		t.Fatalf("source policy envelope %+v", event)
+	}
+	if err = json.Unmarshal(event.Payload, &change); err != nil {
+		t.Fatal(err)
+	}
+	if change.SourceID != first.RequestID || change.SourceRevision != 2 || change.FreshnessWindowSeconds != 86400 || !change.Active {
+		t.Fatalf("source policy payload %+v", change)
+	}
+	for table, want := range map[string]int{"source_admin_audit": 3, "message_outbox": 4, "source_admin_receipt": 3} {
 		var n int
-		if err = db.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil || n != 3 {
-			t.Fatalf("%s count %d: %v", table, n, err)
+		if err = db.QueryRowContext(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil || n != want {
+			t.Fatalf("%s count %d, want %d: %v", table, n, want, err)
 		}
 	}
 }

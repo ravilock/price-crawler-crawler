@@ -35,7 +35,7 @@ func TestSchedulerCoalescingAndRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
-	for _, name := range []string{"001_initial.up.sql", "002_message_delivery.up.sql", "003_collection.up.sql", "004_source_admin.up.sql", "005_scheduler.up.sql", "006_domain_budget.up.sql", "007_domain_leases.up.sql", "008_crawl_scope.up.sql", "009_admin_notifications.up.sql", "010_crawl_leases.up.sql", "011_result_read_ownership.up.sql", "012_evidence_retention.up.sql", "013_observation_ordering.up.sql"} {
+	for _, name := range []string{"001_initial.up.sql", "002_message_delivery.up.sql", "003_collection.up.sql", "004_source_admin.up.sql", "005_scheduler.up.sql", "006_domain_budget.up.sql", "007_domain_leases.up.sql", "008_crawl_scope.up.sql", "009_admin_notifications.up.sql", "010_crawl_leases.up.sql", "011_result_read_ownership.up.sql", "012_evidence_retention.up.sql", "013_observation_ordering.up.sql", "014_ranking_facts.up.sql"} {
 		data, err := os.ReadFile("../../migrations/" + name)
 		if err != nil {
 			t.Fatal(err)
@@ -237,7 +237,7 @@ func TestSchedulerCoalescingAndRecovery(t *testing.T) {
 	if err = db.QueryRow(`SELECT r.state,r.attempt_count,r.next_attempt_at,b.cooldown_until FROM crawl_request r JOIN source_domain_budget b ON b.domain='store.example' WHERE r.id=$1`, first).Scan(&retryState, &attempts, &next, &cooldown); err != nil || retryState != "retry_wait" || attempts != 1 || next.Before(now.Add(2*time.Second-time.Millisecond)) || cooldown.Before(next) {
 		t.Fatalf("retry state=%s attempts=%d next=%v cooldown=%v err=%v", retryState, attempts, next, cooldown, err)
 	}
-	if _, err = db.Exec(`UPDATE crawl_request SET state='completed' WHERE id=$1`, first); err != nil {
+	if _, err = db.Exec(`UPDATE crawl_request SET state='completed',terminal_outcome='partial',completed_at=now() WHERE id=$1`, first); err != nil {
 		t.Fatal(err)
 	}
 	replay := scheduler.Intent{ID: "00000000-0000-4000-8000-000000000200", Organization: org, URL: "https://store.example/product", Reason: "manual", IdempotencyKey: "key-1"}
@@ -295,7 +295,7 @@ func TestCrawlConsumerBrokerAndDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
-	for _, name := range []string{"001_initial.up.sql", "002_message_delivery.up.sql", "003_collection.up.sql", "004_source_admin.up.sql", "005_scheduler.up.sql", "006_domain_budget.up.sql", "007_domain_leases.up.sql", "008_crawl_scope.up.sql", "009_admin_notifications.up.sql", "010_crawl_leases.up.sql", "011_result_read_ownership.up.sql", "012_evidence_retention.up.sql", "013_observation_ordering.up.sql"} {
+	for _, name := range []string{"001_initial.up.sql", "002_message_delivery.up.sql", "003_collection.up.sql", "004_source_admin.up.sql", "005_scheduler.up.sql", "006_domain_budget.up.sql", "007_domain_leases.up.sql", "008_crawl_scope.up.sql", "009_admin_notifications.up.sql", "010_crawl_leases.up.sql", "011_result_read_ownership.up.sql", "012_evidence_retention.up.sql", "013_observation_ordering.up.sql", "014_ranking_facts.up.sql"} {
 		data, err := os.ReadFile("../../migrations/" + name)
 		if err != nil {
 			t.Fatal(err)

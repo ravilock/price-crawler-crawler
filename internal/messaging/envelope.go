@@ -40,6 +40,9 @@ var unversionedMessageTypes = []string{
 	"collection.results.read.result",
 	"candidate.read.requested",
 	"candidate.read.result",
+	"ranking.facts.read.requested",
+	"ranking.facts.read.result",
+	"source.policy.changed",
 }
 
 // Envelope is the tenant-scoped, versioned transport boundary shared by workers.

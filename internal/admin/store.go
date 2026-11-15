@@ -101,6 +101,24 @@ func Execute(ctx context.Context, db *sql.DB, e messaging.Envelope, verified Pri
 	}
 	return result, nil
 }
+func enqueueSourcePolicyChange(ctx context.Context, tx *sql.Tx, e messaging.Envelope, sourceID string, revision int64, freshnessWindow int, active bool) error {
+	id, err := newID()
+	if err != nil {
+		return err
+	}
+	payload, err := json.Marshal(map[string]any{
+		"source_id":                sourceID,
+		"source_revision":          revision,
+		"freshness_window_seconds": freshnessWindow,
+		"active":                   active,
+	})
+	if err != nil {
+		return err
+	}
+	event := messaging.Envelope{MessageID: id, MessageType: "source.policy.changed", SchemaVersion: 1, OccurredAt: time.Now().UTC(), Organization: e.Organization, CorrelationID: e.CorrelationID, CausationID: e.MessageID, Payload: payload}
+	return messaging.EnqueueOutbox(ctx, tx, event, "source.policy.changed.v1")
+}
+
 func apply(ctx context.Context, tx *sql.Tx, e messaging.Envelope, c Command) (Result, error) {
 	var before json.RawMessage
 	if c.Action != "inclusion.request" {
@@ -182,7 +200,13 @@ func apply(ctx context.Context, tx *sql.Tx, e messaging.Envelope, c Command) (Re
 		}
 		encodedCats, _ := json.Marshal(cats)
 		review, _ := json.Marshal(c.Review)
-		if _, err := tx.ExecContext(ctx, `UPDATE source_domain_config SET is_active=$3,approved_categories=$4,adapter_name=$5,max_requests_per_minute=$6,updated_at=now() WHERE organization_id=$1 AND id::text=$2`, e.Organization, c.SourceID, approved, encodedCats, c.Review.SupportedIntegration, c.Review.RequestPacePerMinute); err != nil {
+		var sourceRevision int64
+		var freshnessWindow int
+		var active bool
+		if err := tx.QueryRowContext(ctx, `UPDATE source_domain_config SET is_active=$3,approved_categories=$4,adapter_name=$5,max_requests_per_minute=$6,updated_at=now() WHERE organization_id=$1 AND id::text=$2 RETURNING source_revision,freshness_window_seconds,is_active`, e.Organization, c.SourceID, approved, encodedCats, c.Review.SupportedIntegration, c.Review.RequestPacePerMinute).Scan(&sourceRevision, &freshnessWindow, &active); err != nil {
+			return Result{}, err
+		}
+		if err := enqueueSourcePolicyChange(ctx, tx, e, c.SourceID, sourceRevision, freshnessWindow, active); err != nil {
 			return Result{}, err
 		}
 		if _, err := tx.ExecContext(ctx, `UPDATE source_admin_review SET state=$3,reviewed_by=$4,review=$5,updated_at=now() WHERE organization_id=$1 AND source_domain_id::text=$2`, e.Organization, c.SourceID, state, c.Actor.Subject, review); err != nil {

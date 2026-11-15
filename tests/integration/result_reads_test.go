@@ -23,7 +23,7 @@ func TestResultReadCursorIsTenantAndSubjectScoped(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
-	for _, name := range []string{"001_initial.up.sql", "002_message_delivery.up.sql", "003_collection.up.sql", "004_source_admin.up.sql", "005_scheduler.up.sql", "006_domain_budget.up.sql", "007_domain_leases.up.sql", "008_crawl_scope.up.sql", "009_admin_notifications.up.sql", "010_crawl_leases.up.sql", "011_result_read_ownership.up.sql", "012_evidence_retention.up.sql", "013_observation_ordering.up.sql"} {
+	for _, name := range []string{"001_initial.up.sql", "002_message_delivery.up.sql", "003_collection.up.sql", "004_source_admin.up.sql", "005_scheduler.up.sql", "006_domain_budget.up.sql", "007_domain_leases.up.sql", "008_crawl_scope.up.sql", "009_admin_notifications.up.sql", "010_crawl_leases.up.sql", "011_result_read_ownership.up.sql", "012_evidence_retention.up.sql", "013_observation_ordering.up.sql", "014_ranking_facts.up.sql"} {
 		raw, readErr := os.ReadFile("../../migrations/" + name)
 		if readErr != nil {
 			t.Fatal(readErr)
@@ -48,7 +48,7 @@ func TestResultReadCursorIsTenantAndSubjectScoped(t *testing.T) {
 			requester = otherSubject
 		}
 		created := base.Add(time.Duration(i) * time.Second)
-		if _, err = db.Exec(`INSERT INTO crawl_request(id,organization_id,submitted_url,reason,state,idempotency_key,correlation_id,source_domain_id,category,created_at) VALUES($1,$2,$3,'manual','completed',$4,$5,$6,'parts',$7)`, id, org, "https://store.example/item-"+id, "key-"+id, "00000000-0000-4000-8000-000000000206", source, created); err != nil {
+		if _, err = db.Exec(`INSERT INTO crawl_request(id,organization_id,submitted_url,reason,state,idempotency_key,correlation_id,source_domain_id,category,created_at,terminal_outcome) VALUES($1,$2,$3,'manual','completed',$4,$5,$6,'parts',$7,'partial')`, id, org, "https://store.example/item-"+id, "key-"+id, "00000000-0000-4000-8000-000000000206", source, created); err != nil {
 			t.Fatal(err)
 		}
 		if _, err = db.Exec(`INSERT INTO crawl_intent_key(organization_id,idempotency_key,crawl_request_id,submitted_url,reason,source_domain_id,category,requester_id) VALUES($1,$2,$3,$4,'manual',$5,'parts',$6)`, org, "key-"+id, id, "https://store.example/item-"+id, source, requester); err != nil {

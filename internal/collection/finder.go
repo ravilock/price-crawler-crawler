@@ -209,7 +209,7 @@ func ApplyFinder(ctx context.Context, db *sql.DB, e messaging.Envelope) error {
 	if err = messaging.EnqueueOutbox(ctx, tx, result, "collection.result.v1"); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE crawl_request SET state='completed',offer_id=$3,completed_at=now(),updated_at=now() WHERE organization_id=$1 AND id::text=$2`, e.Organization, p.CrawlRequestID, offerID); err != nil {
+	if _, err = tx.ExecContext(ctx, `UPDATE crawl_request SET state='completed',terminal_outcome='partial',offer_id=$3,completed_at=now(),updated_at=now() WHERE organization_id=$1 AND id::text=$2`, e.Organization, p.CrawlRequestID, offerID); err != nil {
 		return err
 	}
 	return tx.Commit()

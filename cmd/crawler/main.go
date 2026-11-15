@@ -144,6 +144,12 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		results.RunCandidateConsumer(monitorCtx, db, cfg.RabbitMQURL, logger)
 	}()
 	defer func() { stopMonitors(); <-candidateReaderDone }()
+	rankingReaderDone := make(chan struct{})
+	go func() {
+		defer close(rankingReaderDone)
+		results.RunRankingFactsConsumer(monitorCtx, db, cfg.RabbitMQURL, logger)
+	}()
+	defer func() { stopMonitors(); <-rankingReaderDone }()
 	renderDone := make(chan struct{})
 	go func() {
 		defer close(renderDone)

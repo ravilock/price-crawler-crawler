@@ -131,7 +131,7 @@ func retry(ctx context.Context, db *sql.DB, j job, outcome, retryAfter string) e
 	return err
 }
 func finishFailure(ctx context.Context, db *sql.DB, j job, outcome string) error {
-	result, err := db.ExecContext(ctx, `UPDATE crawl_request SET state='failed',last_error_code=$4,lease_token=NULL,lease_until=NULL,updated_at=now() WHERE organization_id=$1 AND id::text=$2 AND lease_token::text=$3 AND state='fetching'`, j.Organization, j.ID, j.Lease, outcome)
+	result, err := db.ExecContext(ctx, `UPDATE crawl_request SET state='failed',terminal_outcome='failed',completed_at=now(),last_error_code=$4,lease_token=NULL,lease_until=NULL,updated_at=now() WHERE organization_id=$1 AND id::text=$2 AND lease_token::text=$3 AND state='fetching'`, j.Organization, j.ID, j.Lease, outcome)
 	if err != nil {
 		return err
 	}

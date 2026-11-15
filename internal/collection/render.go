@@ -130,7 +130,7 @@ func ApplyRendered(ctx context.Context, db *sql.DB, e messaging.Envelope) error 
 		if retry {
 			_, err = tx.ExecContext(ctx, `UPDATE crawl_request SET state='retry_wait',attempt_count=attempt_count+1,next_attempt_at=GREATEST($3,COALESCE((SELECT cooldown_until FROM source_domain_budget WHERE domain=$4),$3)),last_error_code=$5,updated_at=now() WHERE organization_id=$1 AND id::text=$2`, e.Organization, page.CrawlRequestID, next, domain, reason)
 		} else {
-			_, err = tx.ExecContext(ctx, `UPDATE crawl_request SET state='failed',last_error_code=$3,updated_at=now() WHERE organization_id=$1 AND id::text=$2`, e.Organization, page.CrawlRequestID, reason)
+			_, err = tx.ExecContext(ctx, `UPDATE crawl_request SET state='failed',terminal_outcome='failed',completed_at=now(),last_error_code=$3,updated_at=now() WHERE organization_id=$1 AND id::text=$2`, e.Organization, page.CrawlRequestID, reason)
 		}
 		if err != nil {
 			return err
@@ -138,7 +138,7 @@ func ApplyRendered(ctx context.Context, db *sql.DB, e messaging.Envelope) error 
 		return tx.Commit()
 	}
 	if page.Outcome != "complete" && page.Outcome != "partial" {
-		if _, err = tx.ExecContext(ctx, `UPDATE crawl_request SET state='failed',last_error_code=$3,updated_at=now() WHERE organization_id=$1 AND id::text=$2`, e.Organization, page.CrawlRequestID, page.Outcome); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE crawl_request SET state='failed',terminal_outcome='failed',completed_at=now(),last_error_code=$3,updated_at=now() WHERE organization_id=$1 AND id::text=$2`, e.Organization, page.CrawlRequestID, page.Outcome); err != nil {
 			return err
 		}
 		return tx.Commit()

@@ -48,7 +48,7 @@ func orderingDB(t *testing.T) *sql.DB {
 	}
 	sort.Strings(files)
 	for _, file := range files {
-		if strings.Contains(file, "013_observation_ordering") {
+		if strings.Contains(file, "013_observation_ordering") || strings.Contains(file, "014_ranking_facts") {
 			continue
 		}
 		data, e := os.ReadFile(file)

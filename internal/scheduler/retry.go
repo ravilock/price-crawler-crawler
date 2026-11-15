@@ -73,7 +73,7 @@ func ScheduleRetry(ctx context.Context, db *sql.DB, organization, requestID, dom
 	}
 	next, retry := RetryDecision(outcome, attempts, retryAfter, now, jitter)
 	if !retry {
-		_, err = tx.ExecContext(ctx, `UPDATE crawl_request SET state='failed',last_error_code=$3,updated_at=$4 WHERE organization_id=$1 AND id::text=$2`, organization, requestID, outcome, now)
+		_, err = tx.ExecContext(ctx, `UPDATE crawl_request SET state='failed',terminal_outcome='failed',completed_at=$4,last_error_code=$3,updated_at=$4 WHERE organization_id=$1 AND id::text=$2`, organization, requestID, outcome, now)
 	} else {
 		_, err = tx.ExecContext(ctx, `UPDATE crawl_request SET state='retry_wait',attempt_count=attempt_count+1,next_attempt_at=$3,last_error_code=$4,updated_at=$5 WHERE organization_id=$1 AND id::text=$2`, organization, requestID, next, outcome, now)
 		if err == nil && outcome == "rate_limited" {

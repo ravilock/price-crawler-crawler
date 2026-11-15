@@ -182,7 +182,7 @@ func TestEvidenceRetentionUpgradeTreatsMissingDeadlinesAsExpired(t *testing.T) {
 		a []any
 	}{
 		{`INSERT INTO source_domain_config(id,organization_id,domain,max_requests_per_minute) VALUES($1,$2,'example.com',60)`, []any{source, org}},
-		{`INSERT INTO crawl_request(id,organization_id,submitted_url,reason,state,idempotency_key) VALUES($1,$2,'https://example.com/a','manual','completed','key')`, []any{req, org}},
+		{`INSERT INTO crawl_request(id,organization_id,submitted_url,reason,state,idempotency_key,terminal_outcome) VALUES($1,$2,'https://example.com/a','manual','completed','key','partial')`, []any{req, org}},
 		{`INSERT INTO page_fetch_outcome(id,organization_id,crawl_request_id,source_domain_id,requested_url,mode,observed_at,outcome) VALUES($1,$2,$3,$4,'https://example.com/a','rendered',now(),'partial')`, []any{page, org, req, source}},
 		{`INSERT INTO product_information_candidate(id,organization_id,crawl_request_id,page_fetch_outcome_id,title,normalization_version,field_provenance) VALUES($1,$2,$3,$4,'Widget','1','{"title":{"raw_value":"old secret","normalized_value":"Widget"}}')`, []any{candidate, org, req, page}},
 	} {

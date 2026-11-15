@@ -12,7 +12,7 @@ import (
 
 var ErrConflict = errors.New("idempotency key conflicts with an existing request")
 
-type Intent struct{ ID, Organization, URL, Reason, IdempotencyKey, CorrelationID, SourceID, Category, RequesterID string }
+type Intent struct{ ID, Organization, URL, Reason, IdempotencyKey, CorrelationID, SourceID, Category, RequesterID, OfferID string }
 type Receipt struct {
 	ID, State string
 	Created   bool
@@ -22,7 +22,7 @@ type Receipt struct {
 // transaction locks both the idempotency key and URL, including across service
 // processes. Existing idempotency keys never change their original meaning.
 func Submit(ctx context.Context, db *sql.DB, intent Intent) (Receipt, error) {
-	if db == nil || intent.ID == "" || intent.Organization == "" || len(intent.IdempotencyKey) < 1 || len(intent.IdempotencyKey) > 200 || (intent.RequesterID != "" && !validUUID(intent.RequesterID)) || (intent.Reason != "manual" && intent.Reason != "scheduled" && intent.Reason != "discovery") {
+	if db == nil || intent.ID == "" || intent.Organization == "" || len(intent.IdempotencyKey) < 1 || len(intent.IdempotencyKey) > 200 || (intent.RequesterID != "" && !validUUID(intent.RequesterID)) || (intent.OfferID != "" && !validUUID(intent.OfferID)) || (intent.Reason != "manual" && intent.Reason != "scheduled" && intent.Reason != "discovery") {
 		return Receipt{}, errors.New("invalid crawl intent")
 	}
 	if (intent.SourceID == "") != (intent.Category == "") || len(intent.Category) > 100 {
@@ -66,6 +66,11 @@ func Submit(ctx context.Context, db *sql.DB, intent Intent) (Receipt, error) {
 		if existingSource != intent.SourceID || existingCategory != intent.Category {
 			return Receipt{}, ErrConflict
 		}
+		if intent.OfferID != "" {
+			if _, err = tx.ExecContext(ctx, `UPDATE crawl_request SET offer_id=COALESCE(offer_id,NULLIF($3,'')::uuid) WHERE organization_id=$1 AND id=$2`, intent.Organization, result.ID, intent.OfferID); err != nil {
+				return Receipt{}, err
+			}
+		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO crawl_intent_key(organization_id,idempotency_key,crawl_request_id,submitted_url,reason,source_domain_id,category,requester_id) VALUES($1,$2,$3,$4,$5,NULLIF($6,'')::uuid,NULLIF($7,''),NULLIF($8,''))`, intent.Organization, intent.IdempotencyKey, result.ID, intent.URL, intent.Reason, intent.SourceID, intent.Category, intent.RequesterID); err != nil {
 			return Receipt{}, err
 		}
@@ -74,7 +79,7 @@ func Submit(ctx context.Context, db *sql.DB, intent Intent) (Receipt, error) {
 	if !errors.Is(err, sql.ErrNoRows) {
 		return Receipt{}, err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO crawl_request(id,organization_id,submitted_url,reason,state,idempotency_key,correlation_id,source_domain_id,category) VALUES($1,$2,$3,$4,'queued',$5,NULLIF($6,'')::uuid,NULLIF($7,'')::uuid,NULLIF($8,''))`, intent.ID, intent.Organization, intent.URL, intent.Reason, intent.IdempotencyKey, intent.CorrelationID, intent.SourceID, intent.Category)
+	_, err = tx.ExecContext(ctx, `INSERT INTO crawl_request(id,organization_id,submitted_url,reason,state,idempotency_key,correlation_id,source_domain_id,category,offer_id) VALUES($1,$2,$3,$4,'queued',$5,NULLIF($6,'')::uuid,NULLIF($7,'')::uuid,NULLIF($8,''),NULLIF($9,'')::uuid)`, intent.ID, intent.Organization, intent.URL, intent.Reason, intent.IdempotencyKey, intent.CorrelationID, intent.SourceID, intent.Category, intent.OfferID)
 	if err != nil {
 		return Receipt{}, err
 	}
