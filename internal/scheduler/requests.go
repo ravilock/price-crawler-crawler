@@ -22,7 +22,7 @@ type Receipt struct {
 // transaction locks both the idempotency key and URL, including across service
 // processes. Existing idempotency keys never change their original meaning.
 func Submit(ctx context.Context, db *sql.DB, intent Intent) (Receipt, error) {
-	if db == nil || intent.ID == "" || intent.Organization == "" || len(intent.IdempotencyKey) < 1 || len(intent.IdempotencyKey) > 200 || (intent.RequesterID != "" && !commandUUID.MatchString(intent.RequesterID)) || (intent.Reason != "manual" && intent.Reason != "scheduled" && intent.Reason != "discovery") {
+	if db == nil || intent.ID == "" || intent.Organization == "" || len(intent.IdempotencyKey) < 1 || len(intent.IdempotencyKey) > 200 || (intent.RequesterID != "" && !validUUID(intent.RequesterID)) || (intent.Reason != "manual" && intent.Reason != "scheduled" && intent.Reason != "discovery") {
 		return Receipt{}, errors.New("invalid crawl intent")
 	}
 	if (intent.SourceID == "") != (intent.Category == "") || len(intent.Category) > 100 {

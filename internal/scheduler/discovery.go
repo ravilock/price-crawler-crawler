@@ -6,7 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
-	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"net/url"
 	"strings"
@@ -19,7 +19,7 @@ import (
 // per same-origin URL. The caller must fetch the sitemap through the crawler's
 // network-admission path before passing its bounded response body here.
 func SubmitSitemap(ctx context.Context, db *sql.DB, organization, sourceID, category, idempotencyKey, correlationID string, body io.Reader) ([]Receipt, error) {
-	if db == nil || organization == "" || !commandUUID.MatchString(sourceID) || category == "" || len(category) > 100 || category != strings.TrimSpace(category) || len(idempotencyKey) == 0 || len(idempotencyKey) > 160 || body == nil {
+	if db == nil || organization == "" || !validUUID(sourceID) || category == "" || len(category) > 100 || category != strings.TrimSpace(category) || len(idempotencyKey) == 0 || len(idempotencyKey) > 160 || body == nil {
 		return nil, errors.New("invalid sitemap discovery request")
 	}
 	var domain string
@@ -76,5 +76,5 @@ func deterministicUUID(value string) string {
 	b := sum[:16]
 	b[6] = (b[6] & 0x0f) | 0x50
 	b[8] = (b[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:])
+	return uuid.UUID(b).String()
 }

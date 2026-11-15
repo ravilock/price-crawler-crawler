@@ -2,15 +2,14 @@ package results
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"io"
 	"log/slog"
-	"regexp"
 	"strings"
 	"time"
 
@@ -83,7 +82,7 @@ func Read(ctx context.Context, db *sql.DB, organization string, actor Actor, req
 	if db == nil || organization == "" || !validActor(actor) || limit < 1 || limit > 100 {
 		return failure("invalid", "invalid_request")
 	}
-	if requestID != "" && !uuidPattern.MatchString(requestID) {
+	if requestID != "" && !validUUID(requestID) {
 		return failure("invalid", "invalid_request")
 	}
 	var pageCursor cursor
@@ -177,18 +176,14 @@ func Read(ctx context.Context, db *sql.DB, organization string, actor Actor, req
 	return page
 }
 
-var uuidPattern = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
-
 const zeroUUID = "00000000-0000-0000-0000-000000000000"
 
 func newID() (string, error) {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
+	value, err := uuid.NewRandom()
+	if err != nil {
 		return "", err
 	}
-	raw[6] = (raw[6] & 0x0f) | 0x40
-	raw[8] = (raw[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%x-%x-%x-%x-%x", raw[:4], raw[4:6], raw[6:8], raw[8:10], raw[10:]), nil
+	return value.String(), nil
 }
 
 func Handle(ctx context.Context, db *sql.DB, organization string, raw []byte) (Page, error) {
@@ -284,4 +279,14 @@ func consumeReads(ctx context.Context, db *sql.DB, brokerURL, trustedPublisher s
 			}
 		}
 	}
+}
+
+var uuidValidator = validator.New()
+
+func validUUID(value string) bool {
+	if uuidValidator.Var(value, "uuid") != nil {
+		return false
+	}
+	parsed, err := uuid.Parse(value)
+	return err == nil && parsed.Version() >= 1 && parsed.Version() <= 8 && parsed.Variant() == uuid.RFC4122
 }

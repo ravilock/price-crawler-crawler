@@ -154,7 +154,7 @@ func consumeCandidates(ctx context.Context, db *sql.DB, brokerURL string, logger
 			var req CandidateRequest
 			decoder := json.NewDecoder(bytes.NewReader(e.Payload))
 			decoder.DisallowUnknownFields()
-			if err != nil || e.MessageType != "candidate.read.requested" || delivery.ReplyTo == "" || len(delivery.ReplyTo) > 255 || delivery.CorrelationId != e.CorrelationID || decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || !uuidPattern.MatchString(req.OfferID) || !uuidPattern.MatchString(req.CrawlRequestID) || !uuidPattern.MatchString(req.CandidateID) {
+			if err != nil || e.MessageType != "candidate.read.requested" || delivery.ReplyTo == "" || len(delivery.ReplyTo) > 255 || delivery.CorrelationId != e.CorrelationID || decoder.Decode(&req) != nil || decoder.Decode(new(any)) != io.EOF || !validUUID(req.OfferID) || !validUUID(req.CrawlRequestID) || !validUUID(req.CandidateID) {
 				if err = delivery.Reject(false); err != nil {
 					return err
 				}

@@ -3,12 +3,11 @@ package policy
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"log/slog"
 	"net/url"
@@ -61,13 +60,11 @@ type fetchReply struct {
 }
 
 func fetchID() (string, error) {
-	var id [16]byte
-	if _, err := rand.Read(id[:]); err != nil {
+	value, err := uuid.NewRandom()
+	if err != nil {
 		return "", err
 	}
-	id[6] = (id[6] & 15) | 64
-	id[8] = (id[8] & 63) | 128
-	return fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:]), nil
+	return value.String(), nil
 }
 
 // ExecuteFetch only serves active, tenant-owned render jobs with persisted

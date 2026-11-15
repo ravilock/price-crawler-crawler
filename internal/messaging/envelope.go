@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"io"
 	"regexp"
 	"slices"
@@ -14,7 +16,6 @@ import (
 const MaxEnvelopeBytes = 1 << 20
 
 var (
-	uuidPattern        = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 	messageTypePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+\.v[1-9][0-9]*$`)
 )
 
@@ -56,7 +57,7 @@ type Envelope struct {
 
 // Validate checks required envelope fields, the known major version, and bounded JSON payload shape.
 func (e Envelope) Validate() error {
-	if !uuidPattern.MatchString(e.MessageID) {
+	if !validUUID(e.MessageID) {
 		return errors.New("message_id must be a UUID")
 	}
 	if !messageTypePattern.MatchString(e.MessageType) && !slices.Contains(unversionedMessageTypes, e.MessageType) {
@@ -68,13 +69,13 @@ func (e Envelope) Validate() error {
 	if e.OccurredAt.IsZero() {
 		return errors.New("occurred_at is required")
 	}
-	if !uuidPattern.MatchString(e.Organization) {
+	if !validUUID(e.Organization) {
 		return errors.New("organization_id must be a UUID")
 	}
-	if !uuidPattern.MatchString(e.CorrelationID) {
+	if !validUUID(e.CorrelationID) {
 		return errors.New("correlation_id must be a UUID")
 	}
-	if e.CausationID != "" && !uuidPattern.MatchString(e.CausationID) {
+	if e.CausationID != "" && !validUUID(e.CausationID) {
 		return errors.New("causation_id must be a UUID when present")
 	}
 	if len(e.IdempotencyKey) > 200 {
@@ -122,4 +123,14 @@ func (e Envelope) Encode() ([]byte, error) {
 		return nil, errors.New("encoded envelope exceeds size limit")
 	}
 	return data, nil
+}
+
+var uuidValidator = validator.New()
+
+func validUUID(value string) bool {
+	if uuidValidator.Var(value, "uuid") != nil {
+		return false
+	}
+	parsed, err := uuid.Parse(value)
+	return err == nil && parsed.Version() >= 1 && parsed.Version() <= 8 && parsed.Variant() == uuid.RFC4122
 }

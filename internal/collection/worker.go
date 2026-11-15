@@ -2,11 +2,10 @@ package collection
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/google/uuid"
 	"log/slog"
 	mathrand "math/rand/v2"
 	"net"
@@ -23,13 +22,11 @@ import (
 type job struct{ ID, Organization, URL, SourceID, Category, Correlation, Lease string }
 
 func newID() (string, error) {
-	var b [16]byte
-	if _, err := rand.Read(b[:]); err != nil {
+	value, err := uuid.NewRandom()
+	if err != nil {
 		return "", err
 	}
-	b[6] = (b[6] & 15) | 64
-	b[8] = (b[8] & 63) | 128
-	return fmt.Sprintf("%x-%x-%x-%x-%x", b[:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
+	return value.String(), nil
 }
 func claim(ctx context.Context, db *sql.DB) (job, error) {
 	token, err := newID()

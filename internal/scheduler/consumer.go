@@ -6,10 +6,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"io"
 	"log/slog"
 	"net/url"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -19,7 +20,6 @@ import (
 )
 
 var ErrInvalidCommand = errors.New("invalid crawl command")
-var commandUUID = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 
 type command struct {
 	CrawlRequestID string `json:"crawl_request_id"`
@@ -51,13 +51,13 @@ func HandleCommand(ctx context.Context, db *sql.DB, raw []byte, publisher, allow
 	if err = d.Decode(new(any)); !errors.Is(err, io.EOF) {
 		return Receipt{}, ErrInvalidCommand
 	}
-	if !commandUUID.MatchString(c.CrawlRequestID) || (c.OfferID != "" && !commandUUID.MatchString(c.OfferID)) || (c.RequesterID != "" && !commandUUID.MatchString(c.RequesterID)) || len(c.IdempotencyKey) < 1 || len(c.IdempotencyKey) > 200 || (c.Reason != "manual" && c.Reason != "scheduled" && c.Reason != "discovery") || (c.URL == "" && c.OfferID == "") {
+	if !validUUID(c.CrawlRequestID) || (c.OfferID != "" && !validUUID(c.OfferID)) || (c.RequesterID != "" && !validUUID(c.RequesterID)) || len(c.IdempotencyKey) < 1 || len(c.IdempotencyKey) > 200 || (c.Reason != "manual" && c.Reason != "scheduled" && c.Reason != "discovery") || (c.URL == "" && c.OfferID == "") {
 		return Receipt{}, ErrInvalidCommand
 	}
 	if e.MessageType == "crawl.requested" && (c.SourceID != "" || c.Category != "") {
 		return Receipt{}, ErrInvalidCommand
 	}
-	if e.MessageType == "crawl.scoped.requested" && (!commandUUID.MatchString(c.SourceID) || c.Category == "" || len(c.Category) > 100 || c.Category != strings.TrimSpace(c.Category)) {
+	if e.MessageType == "crawl.scoped.requested" && (!validUUID(c.SourceID) || c.Category == "" || len(c.Category) > 100 || c.Category != strings.TrimSpace(c.Category)) {
 		return Receipt{}, ErrInvalidCommand
 	}
 	rawURL := c.URL
@@ -178,4 +178,14 @@ func consumeCommands(ctx context.Context, db *sql.DB, brokerURL, publisher, queu
 			}
 		}
 	}
+}
+
+var uuidValidator = validator.New()
+
+func validUUID(value string) bool {
+	if uuidValidator.Var(value, "uuid") != nil {
+		return false
+	}
+	parsed, err := uuid.Parse(value)
+	return err == nil && parsed.Version() >= 1 && parsed.Version() <= 8 && parsed.Variant() == uuid.RFC4122
 }
