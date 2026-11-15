@@ -124,6 +124,27 @@ func ApplyFinder(ctx context.Context, db *sql.DB, e messaging.Envelope) error {
 	if state != "finding" {
 		return ErrInvalidFinderResult
 	}
+	// A recovered crawl may already have a newer finder request. A delayed
+	// result from the expired page must never populate the new attempt.
+	var current bool
+	err = tx.QueryRowContext(ctx, `SELECT message_id::text=$3 FROM message_outbox WHERE organization_id=$1 AND destination='product.find.requested.v1' AND payload->'payload'->>'crawl_request_id'=$2 ORDER BY created_at DESC,message_id DESC LIMIT 1`, e.Organization, p.CrawlRequestID, e.CausationID).Scan(&current)
+	if err != nil {
+		return err
+	}
+	if !current {
+		return tx.Commit()
+	}
+	var expired bool
+	err = tx.QueryRowContext(ctx, `SELECT raw_evidence_expired_at IS NOT NULL OR raw_evidence_deadline <= clock_timestamp() FROM page_fetch_outcome WHERE organization_id=$1 AND id::text=$2 FOR UPDATE`, e.Organization, pageID).Scan(&expired)
+	if err != nil {
+		return err
+	}
+	if expired {
+		if _, err = tx.ExecContext(ctx, `UPDATE crawl_request SET state='queued',next_attempt_at=NULL,last_error_code='evidence_expired',updated_at=now() WHERE organization_id=$1 AND id::text=$2 AND state='finding'`, e.Organization, p.CrawlRequestID); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
 	var observed time.Time
 	var adapterVersion string
 	if err = tx.QueryRowContext(ctx, `SELECT observed_at,COALESCE(adapter_version,renderer_version,'') FROM page_fetch_outcome WHERE organization_id=$1 AND id::text=$2 AND crawl_request_id::text=$3`, e.Organization, pageID, p.CrawlRequestID).Scan(&observed, &adapterVersion); err != nil {

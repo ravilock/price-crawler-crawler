@@ -2,4 +2,4 @@
 // migration command and application readiness check.
 package migrationversion
 
-const Expected = 11
+const Expected = 12

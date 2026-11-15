@@ -165,6 +165,16 @@ dependency startup, not application, migration, demo or business-workflow readin
 
 ## Owned migrations — T073
 
+Migration 012 preserves raw-evidence deadlines and records completion of redaction.
+For older page records whose original deadline was already erased, the upgrade
+conservatively treats the evidence as due immediately. The retention worker clears
+raw candidate and observation provenance, removes finder page data from retained
+outbox rows, and requeues an unfinished crawl when its current finder input has
+expired. Normalized product facts and observation history remain available.
+Recovery uses ordinary collection policy and source limits. Rollback cannot restore
+redacted evidence. Messages already delivered to RabbitMQ are outside the database
+sweep; broker queue and dead-letter retention must also be managed by the operator.
+
 The crawler image packages `/migrations`, the PostgreSQL-capable upstream
 `migrate/migrate:v4.18.3` CLI at `/usr/local/bin/migrate`, and `/migration`, a bounded
 administrative entry point that reads `DATABASE_URL` from environment configuration.
