@@ -136,12 +136,12 @@ func consumeCandidates(ctx context.Context, db *sql.DB, brokerURL string, logger
 	if err != nil {
 		return err
 	}
-	defer consumer.Close()
+	defer func() { _ = consumer.Close() }()
 	publisher, err := messaging.NewPublisher(brokerURL)
 	if err != nil {
 		return err
 	}
-	defer publisher.Close()
+	defer func() { _ = publisher.Close() }()
 	for {
 		select {
 		case <-ctx.Done():
