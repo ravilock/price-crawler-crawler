@@ -193,7 +193,7 @@ func ApplyFinder(ctx context.Context, db *sql.DB, e messaging.Envelope) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `INSERT INTO price_availability_observation(id,organization_id,offer_id,price_cents,payment_method,availability,observed_at,idempotency_key,crawl_request_id,outcome,provenance,adapter_version) VALUES($1,$2,$3,$4,$5,$6,$7,$8::text,$8::uuid,'partial',$9,$10)`, observationID, e.Organization, offerID, o.PriceCents, o.PaymentMethod, o.Availability, observed, p.CrawlRequestID, fields, adapterVersion)
+	_, err = tx.ExecContext(ctx, `INSERT INTO price_availability_observation(id,organization_id,offer_id,price_cents,payment_method,availability,observed_at,idempotency_key,crawl_request_id,outcome,provenance,adapter_version,price_status) VALUES($1,$2,$3,$4,$5,$6,$7,$8::text,$8::uuid,'partial',$9,$10,$11)`, observationID, e.Organization, offerID, o.PriceCents, o.PaymentMethod, o.Availability, observed, p.CrawlRequestID, fields, adapterVersion, o.PriceStatus)
 	if err != nil {
 		return err
 	}

@@ -22,6 +22,7 @@ jobs:
           --health-retries 10
     env:
       T162_TEST_DATABASE_URL: postgres://postgres:crawler-test@127.0.0.1:5432/postgres?sslmode=disable
+      CRAWLER_TEST_DATABASE_URL: postgres://postgres:crawler-test@127.0.0.1:5432/postgres?sslmode=disable
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:

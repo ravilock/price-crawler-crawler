@@ -175,6 +175,18 @@ Recovery uses ordinary collection policy and source limits. Rollback cannot rest
 redacted evidence. Messages already delivered to RabbitMQ are outside the database
 sweep; broker queue and dead-letter retention must also be managed by the operator.
 
+Migration 013 (T137) adds stable per-offer observation ordering. The observation row
+id is the stable `observation_id`; `position` is a positive, per-offer increasing
+integer assigned under the offer lock in the same transaction as the observation.
+Retained rows are backfilled by ascending `observed_at`, then ascending observation id
+so equal timestamps keep a reproducible order. Legacy retained prices become
+`price_status='valid'` and null prices `missing`; new writes carry the finder's
+explicit status, and `payment_eligible` is stored for valid BRL cash observations.
+Identity, ordering, price and stock facts are append-only; evidence redaction,
+adapter version and outcome updates remain allowed. A duplicate crawl request is
+rejected by the existing request uniqueness rule and never consumes a position.
+Failures that produce no observation do not advance a position.
+
 The crawler image packages `/migrations`, the PostgreSQL-capable upstream
 `migrate/migrate:v4.18.3` CLI at `/usr/local/bin/migrate`, and `/migration`, a bounded
 administrative entry point that reads `DATABASE_URL` from environment configuration.
