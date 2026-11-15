@@ -304,3 +304,5 @@ the publisher credential. End-user reads are limited to requests associated
 with the authenticated subject. The crawler outbox relay retries failed durable
 event publication up to five times with bounded delay, then records the message
 for operator recovery.
+
+Candidate reads require `CANDIDATE_READ_IDENTITIES_JSON`, a JSON object mapping each trusted RabbitMQ publisher username to an array of authorized organization UUIDs, for example `{"catalog-reader":["00000000-0000-4000-8000-000000000001"]}`. Configure broker credentials and ACLs so only the catalog service can publish with that username. Missing or invalid configuration denies reads.

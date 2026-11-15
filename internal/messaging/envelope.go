@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"time"
 )
 
@@ -16,6 +17,29 @@ var (
 	uuidPattern        = regexp.MustCompile(`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 	messageTypePattern = regexp.MustCompile(`^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+\.v[1-9][0-9]*$`)
 )
+
+// These workflow message types use unversioned names in the envelope; their
+// routing keys carry the version separately.
+var unversionedMessageTypes = []string{
+	"render.page.requested",
+	"page.parsed",
+	"product.information.found",
+	"collection.result",
+	"product.find.requested",
+	"source.alerts.read.requested",
+	"source.alerts.read.result",
+	"crawl.scoped.requested",
+	"crawl.requested",
+	"source.admin.command",
+	"source.admin.result",
+	"audit.event.recorded",
+	"network.fetch.requested",
+	"network.fetch.result",
+	"collection.results.read.requested",
+	"collection.results.read.result",
+	"candidate.read.requested",
+	"candidate.read.result",
+}
 
 // Envelope is the tenant-scoped, versioned transport boundary shared by workers.
 type Envelope struct {
@@ -35,7 +59,7 @@ func (e Envelope) Validate() error {
 	if !uuidPattern.MatchString(e.MessageID) {
 		return errors.New("message_id must be a UUID")
 	}
-	if !messageTypePattern.MatchString(e.MessageType) && e.MessageType != "render.page.requested" && e.MessageType != "page.parsed" && e.MessageType != "product.information.found" && e.MessageType != "collection.result" && e.MessageType != "product.find.requested" && e.MessageType != "source.alerts.read.requested" && e.MessageType != "source.alerts.read.result" && e.MessageType != "crawl.scoped.requested" && e.MessageType != "crawl.requested" && e.MessageType != "source.admin.command" && e.MessageType != "source.admin.result" && e.MessageType != "audit.event.recorded" && e.MessageType != "network.fetch.requested" && e.MessageType != "network.fetch.result" && e.MessageType != "collection.results.read.requested" && e.MessageType != "collection.results.read.result" {
+	if !messageTypePattern.MatchString(e.MessageType) && !slices.Contains(unversionedMessageTypes, e.MessageType) {
 		return errors.New("message_type must be a supported dotted message name")
 	}
 	if e.SchemaVersion != 1 {

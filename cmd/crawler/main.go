@@ -138,6 +138,12 @@ func run(ctx context.Context, cfg config.Config, logger *slog.Logger) error {
 		results.RunReadConsumer(monitorCtx, db, cfg.RabbitMQURL, os.Getenv("RESULT_READ_PUBLISHER"), logger)
 	}()
 	defer func() { stopMonitors(); <-resultReaderDone }()
+	candidateReaderDone := make(chan struct{})
+	go func() {
+		defer close(candidateReaderDone)
+		results.RunCandidateConsumer(monitorCtx, db, cfg.RabbitMQURL, logger)
+	}()
+	defer func() { stopMonitors(); <-candidateReaderDone }()
 	renderDone := make(chan struct{})
 	go func() {
 		defer close(renderDone)
